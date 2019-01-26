@@ -217,7 +217,10 @@ def run_bot():
     add_schedule_handler = CommandHandler('schedule', schedule)
     unknown_handler = MessageHandler(Filters.command, unknown)
 
-    text_msg_handler = MessageHandler(Filters.text, text_msg)
+    dispatcher.add_handler(start_cmd_handler)
+    dispatcher.add_handler(add_classes_handler)
+    dispatcher.add_handler(add_schedule_handler)
+    dispatcher.add_handler(unknown_handler)
 
     # Add subscribe handler with the states CHOOSE_DATE, CHOOSE_TIME
     subscribe_conv_handler = ConversationHandler(
@@ -230,14 +233,10 @@ def run_bot():
         name="subscribe_conversation",
         persistent=True
     )
-
-    dispatcher.add_handler(start_cmd_handler)
-    dispatcher.add_handler(add_classes_handler)
-    dispatcher.add_handler(add_schedule_handler)
-    dispatcher.add_handler(unknown_handler)
-
-    dispatcher.add_handler(text_msg_handler)
     dispatcher.add_handler(subscribe_conv_handler)
+
+    text_msg_handler = MessageHandler(Filters.text, text_msg)
+    dispatcher.add_handler(text_msg_handler)
 
     # log all errors
     dispatcher.add_error_handler(error)
