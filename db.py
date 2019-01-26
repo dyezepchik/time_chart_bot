@@ -55,6 +55,31 @@ WHERE
     id = ? 
 """
 
+get_open_classes_dates_sql = """
+SELECT DISTINCT date from classes where date > ?;
+"""
+
+get_open_classes_time_sql = """
+SELECT time FROM classes WHERE date = ? AND open = 1;
+"""
+
+set_user_date_time_sql = """
+INSERT INTO schedule (user_id, class_id) VALUES (?,?);
+"""
+
+get_class_id_sql = """
+SELECT id from classes WHERE date = ? AND time = ?;
+"""
+
+get_full_schedule_sql = """
+SELECT date, time, first_name, last_name, nick_name 
+FROM classes cl 
+JOIN schedule sch ON cl.id=sch.class_id 
+JOIN users us ON us.id=sch.user_id
+WHERE cl.date>? 
+ORDER BY cl.date, cl.time;
+"""
+
 
 def create_connection(db_file):
     """ create a database connection to a SQLite database """

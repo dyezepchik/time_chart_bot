@@ -3,3 +3,5 @@ __pycache__/
 *.sql
 venv*
 bot_details.txt
+python-telegram-bot
+conversationbot
