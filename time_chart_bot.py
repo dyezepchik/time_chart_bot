@@ -14,10 +14,26 @@ import logging
 
 import apiai
 from telegram import ReplyKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import CommandHandler, ConversationHandler, MessageHandler, Filters, Updater
+from telegram.ext import (
+    CommandHandler,
+    ConversationHandler,
+    RegexHandler,
+    MessageHandler,
+    Filters,
+    Updater
+)
 
 from config import DATE_FORMAT, CLASSES_HOURS, DB_FILE, BOT_TOKEN
-from db import create_connection, execute_insert, add_classes_dates_sql, upsert_user
+from db import (
+    create_connection,
+    execute_insert,
+    execute_select,
+    add_classes_dates_sql,
+    get_open_classes_dates_sql,
+    get_open_classes_time_sql,
+    upsert_user
+)
+
 from tools import LIST_OF_ADMINS
 
 
@@ -31,8 +47,8 @@ logging.basicConfig(filename='time_chart_bot.log',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# classes adding process
-START, END = range(2)
+# Conversation states
+DATE, TIME = range(2)
 
 
 # commands
@@ -97,6 +113,14 @@ def add(bot, update, args):
                                                           "Все верно?".format(start, end))
 
 
+def end_conversation(bot, update):
+    user = update.message.from_user
+    logger.debug("User %s canceled the conversation.", user.first_name)
+    update.message.reply_text('Ок. На том и порешим пока.')
+
+    return ConversationHandler.END
+
+
 def unknown(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text="Извини, не знаю такой команды.")
 
@@ -108,31 +132,48 @@ def error(bot, update, error):
 
 # messages
 def text_msg(bot, update):
-    if update.message.text.lower() == "запиши меня":
-        keyboard = [[
-            InlineKeyboardButton("Завтра", callback_data=str(dt.date.today()+dt.timedelta(days=1))),
-            InlineKeyboardButton("Послезавтра", callback_data=str(dt.date.today()+dt.timedelta(days=2))),
-        ]]
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="На когда?",
-                         reply_markup=reply_markup)
+    request = apiai.ApiAI('e0f0ee1fd08b4160bdb26c69df632678').text_request()
+    request.lang = 'ru'
+    request.session_id = 'MotoChatAIBot'
+    request.query = update.message.text
+    response_json = json.loads(request.getresponse().read().decode('utf-8'))
+    response = response_json['result']['fulfillment']['speech']
+    if response:
+        bot.send_message(chat_id=update.message.chat_id, text=response)
     else:
-        # handle continuation of registration
-        # reply_markup = ReplyKeyboardRemove()
-        # bot.send_message(chat_id=update.message.chat_id,
-        #                  text="Ok, записал на {}".format(update.message.text),
-        #                  reply_markup=reply_markup)        
-        request = apiai.ApiAI('e0f0ee1fd08b4160bdb26c69df632678').text_request()
-        request.lang = 'ru'
-        request.session_id = 'MotoChatAIBot'
-        request.query = update.message.text
-        response_json = json.loads(request.getresponse().read().decode('utf-8'))
-        response = response_json['result']['fulfillment']['speech']
-        if response:
-            bot.send_message(chat_id=update.message.chat_id, text=response)
-        else:
-            bot.send_message(chat_id=update.message.chat_id, text='Я не совсем понял.')
+        bot.send_message(chat_id=update.message.chat_id, text='Я не совсем понял.')
+
+
+def ask_date(bot, update):
+    # check for number of subscriptions for the user, not more than 2
+    open_dates = execute_select(get_open_classes_dates_sql, (dt.date.today().isoformat(),))
+    open_dates = map(lambda x: x[0], open_dates)
+    keyboard = [[InlineKeyboardButton(str(date), callback_data=str(date))] for date in open_dates]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="На когда?",
+                     reply_markup=reply_markup)
+    return DATE
+
+
+def store_date(bot, update):
+    date = update.message.text
+    times = execute_select(get_open_classes_time_sql, (date,))
+    times = map(lambda x: x[0], times)
+    keyboard = [[InlineKeyboardButton(str(time), callback_data=str(time))] for time in times]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Теперь выбери время",
+                     reply_markup=reply_markup)
+    return TIME
+
+
+def store_time(bot, update):
+    import pdb
+    pdb.set_trace()
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Ok, записал на {}".format(update.message.text))
+    return ConversationHandler.END
 
 
 def run_bot():
@@ -147,25 +188,17 @@ def run_bot():
     dispatcher.add_handler(unknown_handler)
 
     # Add subscribe handler with the states CHOOSE_DATE, CHOOSE_TIME
-    # subscribe_conv_handler = ConversationHandler(
-    #     entry_points=[CommandHandler('start', start)],
-    #
-    #     states={
-    #         GENDER: [RegexHandler('^(Boy|Girl|Other)$', gender)],
-    #
-    #         PHOTO: [MessageHandler(Filters.photo, photo),
-    #                 CommandHandler('skip', skip_photo)],
-    #
-    #         LOCATION: [MessageHandler(Filters.location, location),
-    #                    CommandHandler('skip', skip_location)],
-    #
-    #         BIO: [MessageHandler(Filters.text, bio)]
-    #     },
-    #
-    #     fallbacks=[CommandHandler('cancel', cancel)]
-    # )
-    #
-    # dispatcher.add_handler(add_conv_handler)
+    subscribe_conv_handler = ConversationHandler(
+        entry_points=[RegexHandler(".*([Зз]апиши меня).*", ask_date)],
+        states={
+            DATE: [RegexHandler("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", store_date)],
+
+            TIME: [RegexHandler("^[" + "|".join(CLASSES_HOURS) + "]$", store_time)],
+        },
+        fallbacks=[CommandHandler('cancel', end_conversation)]
+    )
+
+    dispatcher.add_handler(subscribe_conv_handler)
 
     dispatcher.add_handler(text_msg_handler)
 

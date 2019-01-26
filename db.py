@@ -55,6 +55,14 @@ WHERE
     id = ? 
 """
 
+get_open_classes_dates_sql = """
+SELECT DISTINCT date from classes where date > ?;
+"""
+
+get_open_classes_time_sql = """
+SELECT time FROM classes WHERE date = ? AND open is TRUE;
+"""
+
 
 def create_connection(db_file):
     """ create a database connection to a SQLite database """
