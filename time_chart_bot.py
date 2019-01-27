@@ -36,7 +36,8 @@ from db import (
     upsert_user,
     set_user_date_time_sql,
     get_class_id_sql,
-    get_full_schedule_sql
+    get_full_schedule_sql,
+    get_user_subscriptions_count_sql
 )
 
 from tools import LIST_OF_ADMINS
@@ -156,6 +157,12 @@ def text_msg(bot, update):
 
 def ask_date(bot, update):
     # check for number of subscriptions for the user, not more than 2
+    user_id = update.effective_user.id
+    subs_count = execute_select(get_user_subscriptions_count_sql, (user_id, dt.date.today().isoformat()))[0][0]
+    if subs_count > 1:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="У тебя уже есть две записи. Сначала отмени другую запись.")
+        return ConversationHandler.END
     open_dates = execute_select(get_open_classes_dates_sql, (dt.date.today().isoformat(),))
     open_dates = map(lambda x: x[0], open_dates)
     keyboard = [[InlineKeyboardButton(str(date), callback_data=str(date))] for date in open_dates]

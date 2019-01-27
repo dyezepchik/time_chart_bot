@@ -80,6 +80,12 @@ WHERE cl.date>?
 ORDER BY cl.date, cl.time;
 """
 
+get_user_subscriptions_count_sql = """
+SELECT COUNT(*) FROM schedule sch 
+JOIN classes cl ON sch.class_id=cl.id
+WHERE sch.user_id = ? and cl.date >= ?;
+"""
+
 
 def create_connection(db_file):
     """ create a database connection to a SQLite database """
