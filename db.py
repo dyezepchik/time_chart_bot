@@ -39,7 +39,9 @@ INSERT INTO classes (date, time, open)
 VALUES (?,?,?);
  """
 
-get_user_sql = """SELECT * FROM users where id=?"""
+get_user_sql = """
+SELECT * FROM users WHERE id=?;
+"""
 
 add_user_sql = """
 INSERT INTO users (id, nick_name, first_name, last_name)
@@ -52,18 +54,21 @@ SET nick_name = ?,
     first_name = ?,
     last_name = ?
 WHERE
-    id = ? 
+    id = ?;
 """
 
 get_open_classes_dates_sql = """
-SELECT DISTINCT date from classes where date > ?;
+SELECT date, count(*) from classes 
+WHERE date > ? AND open = 1
+GROUP BY date
+ORDER BY date;
 """
 
 get_open_classes_time_sql = """
 SELECT time FROM classes WHERE date = ? AND open = 1;
 """
 
-set_user_date_time_sql = """
+set_user_subscription_sql = """
 INSERT INTO schedule (user_id, class_id) VALUES (?,?);
 """
 
@@ -80,10 +85,27 @@ WHERE cl.date>?
 ORDER BY cl.date, cl.time;
 """
 
-get_user_subscriptions_count_sql = """
-SELECT COUNT(*) FROM schedule sch 
+get_user_subscriptions_sql = """
+SELECT cl.date, cl.time FROM schedule sch 
 JOIN classes cl ON sch.class_id=cl.id
 WHERE sch.user_id = ? and cl.date >= ?;
+"""
+
+delete_user_subscription_sql = """
+DELETE FROM schedule WHERE user_id = ? AND class_id = ?;
+"""
+
+get_people_count_per_time_slot_sql = """
+SELECT COUNT(*) FROM schedule sch 
+JOIN classes cl ON sch.class_id=cl.id
+WHERE cl.date = ? AND cl.TIME = ?;
+"""
+
+set_class_state = """
+UPDATE classes
+SET open = ?
+WHERE
+    id = ?;
 """
 
 
