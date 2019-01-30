@@ -1,8 +1,10 @@
+import os
 from functools import wraps
+
 
 LIST_OF_ADMINS = [
     512834590,  # my id
-    375295095767
+    int(os.environ['ADMIN_ID']),
 ]
 
 

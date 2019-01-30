@@ -1,5 +1,8 @@
+import os
+
+
 # bot config
-BOT_TOKEN = ""
+BOT_TOKEN = os.environ['BOT_TOKEN']
 
 DB_FILE = "bot_database.sql"
 
