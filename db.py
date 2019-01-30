@@ -76,6 +76,10 @@ get_class_id_sql = """
 SELECT id from classes WHERE date = ? AND time = ?;
 """
 
+get_classes_ids_sql = """
+SELECT id from classes WHERE date = ?;
+"""
+
 get_full_schedule_sql = """
 SELECT date, time, first_name, last_name, nick_name 
 FROM classes cl 
@@ -107,6 +111,14 @@ SET open = ?
 WHERE
     id = ?;
 """
+
+
+def get_delete_schedules_for_classes_sql(desired_ids):
+    return "DELETE FROM schedule WHERE class_id IN ({});".format(','.join('?'*len(desired_ids)))
+
+
+def get_delete_classes_sql(desired_ids):
+    return "DELETE FROM classes WHERE id IN ({});".format(','.join('?'*len(desired_ids)))
 
 
 def create_connection(db_file):

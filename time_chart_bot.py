@@ -7,7 +7,7 @@ Commands:
     Adds a new schedule for an ongoing period between start and end dates
 
 """
-# Try pendulum https://github.com/sdispater/pendulum
+# TODO: Try pendulum https://github.com/sdispater/pendulum
 import datetime as dt
 import json
 import logging
@@ -75,7 +75,7 @@ def add(bot, update, args):
             end = dt.datetime.strptime(args[1], DATE_FORMAT).date()
         except (ValueError, TypeError) as e:
             bot.send_message(chat_id=update.message.chat_id,
-                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2018-05-01")
+                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01")
             return
         if start > end:
             bot.send_message(chat_id=update.message.chat_id,
@@ -121,6 +121,35 @@ def schedule(bot, update):
     lines = [" ".join((line[0], line[1], line[2], "({})".format(line[4]), line[3])) for line in schedule]
     text = "\n".join(lines)
     bot.send_message(chat_id=update.message.chat_id, text=text)
+
+
+def remove(bot, update, args):
+    """Remove dates of classes"""
+    user_id = update.effective_user.id
+    if user_id not in LIST_OF_ADMINS:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Только мамке можно удалять расписание!")
+        return
+    if len(args) == 2:
+        # remove range
+        pass
+    elif len(args) == 1:
+        try:
+            date = dt.datetime.strptime(args[0], DATE_FORMAT).date()
+        except (ValueError, TypeError) as e:
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01")
+            return
+        # remove schedule records for classes for given date
+        classes_ids = db.execute_select(db.get_classes_ids_sql, (date,))
+        classes_ids = list(map(lambda x: x[0], classes_ids))
+        db.execute_insert(db.get_delete_schedules_for_classes_sql(classes_ids), classes_ids)
+        db.execute_insert(db.get_delete_classes_sql(classes_ids), classes_ids)
+    else:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Непонятно что удалять.")
+        return
+    bot.send_message(chat_id=update.message.chat_id, text="Ок, удалил расписание на {}".format(date))
 
 
 def unknown(bot, update):
@@ -257,11 +286,13 @@ def run_bot():
     start_cmd_handler = CommandHandler('start', start_cmd)
     add_classes_handler = CommandHandler('add', add, pass_args=True)
     add_schedule_handler = CommandHandler('schedule', schedule)
+    remove_schedule_handler = CommandHandler('remove', remove, pass_args=True)
     unknown_handler = MessageHandler(Filters.command, unknown)
 
     dispatcher.add_handler(start_cmd_handler)
     dispatcher.add_handler(add_classes_handler)
     dispatcher.add_handler(add_schedule_handler)
+    dispatcher.add_handler(remove_schedule_handler)
     dispatcher.add_handler(unknown_handler)
 
     # Add subscribe handler with the states DATE, TIME
@@ -278,7 +309,7 @@ def run_bot():
     dispatcher.add_handler(subscribe_conv_handler)
 
     # Add unsubscribe handler with the states
-    subscribe_conv_handler = ConversationHandler(
+    unsubscribe_conv_handler = ConversationHandler(
         entry_points=[RegexHandler(".*([Оо]тпиши меня|[Оо]тмени запись).*", ask_unsubscribe)],
         states={
             UNSUBSCRIBE: [MessageHandler(Filters.text, unsubscribe, pass_user_data=True)],
@@ -287,7 +318,7 @@ def run_bot():
         name="unsubscribe_conversation",
         persistent=True
     )
-    dispatcher.add_handler(subscribe_conv_handler)
+    dispatcher.add_handler(unsubscribe_conv_handler)
 
     text_msg_handler = MessageHandler(Filters.text, text_msg)
     dispatcher.add_handler(text_msg_handler)
