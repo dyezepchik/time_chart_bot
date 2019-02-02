@@ -1,10 +1,10 @@
 import os
 
 
+DATABASE_URL = os.environ['DATABASE_URL']
+
 # bot config
 BOT_TOKEN = os.environ['BOT_TOKEN']
-
-DB_FILE = "bot_database.sql"
 
 DATE_FORMAT = "%Y-%m-%d"
 

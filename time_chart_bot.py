@@ -28,11 +28,11 @@ from telegram.ext import (
 
 import db
 
-from config import DATE_FORMAT, CLASSES_HOURS, DB_FILE, BOT_TOKEN, PEOPLE_PER_TIME_SLOT
+from config import DATE_FORMAT, CLASSES_HOURS, DATABASE_URL, BOT_TOKEN, PEOPLE_PER_TIME_SLOT
 from tools import LIST_OF_ADMINS
 
 
-conn = db.create_connection(DB_FILE)
+conn = db.create_connection(DATABASE_URL)
 
 logging.basicConfig(filename='time_chart_bot.log',
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Conversation states
 DATE, TIME, UNSUBSCRIBE = range(3)
 # classes states
-CLOSED, OPEN = 0, 1
+CLOSED, OPEN = False, True
 
 # regex
 date_regex = re.compile("^([0-9]{4}-[0-9]{2}-[0-9]{2}).*")
@@ -143,8 +143,8 @@ def remove(bot, update, args):
         # remove schedule records for classes for given date
         classes_ids = db.execute_select(db.get_classes_ids_sql, (date,))
         classes_ids = list(map(lambda x: x[0], classes_ids))
-        db.execute_insert(db.get_delete_schedules_for_classes_sql(classes_ids), classes_ids)
-        db.execute_insert(db.get_delete_classes_sql(classes_ids), classes_ids)
+        db.execute_insert(db.get_delete_schedules_for_classes_sql, (classes_ids,))
+        db.execute_insert(db.get_delete_classes_sql, (classes_ids,))
     else:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Непонятно что удалять.")
