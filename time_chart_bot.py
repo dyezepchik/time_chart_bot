@@ -3,9 +3,19 @@
 Commands:
  - /start
     On start bot checks if user exists in database already and adds him if not
- - /add [2018-04-29 2018-05-04]
+ - /add 2018-04-29 [2018-05-04]
     Adds a new schedule for an ongoing period between start and end dates
+    Args: date ot dates range
+ - /schedule
+    Gives the full schedule of your upcoming classes
+ - /remove 2018-04-29
+    Removes all schedule and upcoming classes for the given date(s)
+    Args: date ot dates range
 
+Conversation:
+ To ask bot to subscribe you to a classes write to it: "З(з)апиши меня" starting with a capital or lowercase letter.
+ To ask bot to unsubscribe you from a class write: О[о]тпиши меня or О[о]тмени запись.
+ Then follow it's instructions.
 """
 # TODO: Try pendulum https://github.com/sdispater/pendulum
 import datetime as dt
