@@ -118,7 +118,7 @@ def schedule(bot, update):
                          text="Только мамке покажу расписание!")
         return
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
-    lines = [" ".join((line[0], line[1], line[2], "({})".format(line[4]), line[3])) for line in schedule]
+    lines = [" ".join((str(line[0]), line[1], line[2], "({})".format(line[4]), line[3])) for line in schedule]
     text = "\n".join(lines)
     bot.send_message(chat_id=update.message.chat_id, text=text)
 
