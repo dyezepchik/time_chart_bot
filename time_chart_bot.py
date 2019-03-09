@@ -8,9 +8,9 @@ Commands:
     Args: date ot dates range
  - /schedule
     Gives the full schedule of your upcoming classes
- - /remove 2018-04-29
+ - /remove 2018-04-29 [2018-05-03]
     Removes all schedule and upcoming classes for the given date(s)
-    Args: date ot dates range
+    Args: date or dates range
 
 Conversation:
  To ask bot to subscribe you to a classes write to it: "З(з)апиши меня" starting with a capital or lowercase letter.
@@ -23,8 +23,11 @@ import json
 import logging
 import re
 
+from itertools import product
+
 import apiai
 
+from psycopg2 import Error as DBError
 from telegram import ReplyKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     CommandHandler,
@@ -38,7 +41,7 @@ from telegram.ext import (
 
 import db
 
-from config import DATE_FORMAT, CLASSES_HOURS, DATABASE_URL, BOT_TOKEN, PEOPLE_PER_TIME_SLOT
+from config import DATE_FORMAT, CLASSES_HOURS, DATABASE_URL, BOT_TOKEN, PEOPLE_PER_TIME_SLOT, PLACES
 from tools import LIST_OF_ADMINS
 
 
@@ -50,11 +53,18 @@ logging.basicConfig(filename='time_chart_bot.log',
 logger = logging.getLogger(__name__)
 
 # Conversation states
-DATE, TIME, UNSUBSCRIBE = range(3)
+ASK_PLACE_STATE,\
+    ASK_DATE_STATE,\
+    ASK_TIME_STATE,\
+    RETURN_UNSUBSCRIBE_STATE,\
+    ASK_FIRST_NAME_STATE, \
+    ASK_LAST_NAME_STATE = range(6)
+
 # classes states
 CLOSED, OPEN = False, True
 
 # regex
+place_regex = re.compile("^({})$".format("|".join(PLACES)), flags=re.IGNORECASE)
 date_regex = re.compile("^([0-9]{4}-[0-9]{2}-[0-9]{2}).*")
 time_regex = re.compile("^(" + "|".join(CLASSES_HOURS) + ")$")
 
@@ -69,7 +79,10 @@ def start_cmd(bot, update):
     bot.send_message(chat_id=update.message.chat_id,
                      text="Привет! Я бот вместо мамки. Буду вас записывать на занятия. "
                           "Записаться можно при наличии времени в расписании, написав мне \"запиши меня\". "
-                          "И я предложу выбрать из тех дат, которые остались свободными.")
+                          "И я предложу выбрать из тех дат, которые остались свободными."
+                          "А сейчас представься пожалуйста, чтобы я знал, кого я записываю на занятия."
+                          "Напиши свое имя.")
+    return ASK_FIRST_NAME_STATE
 
 
 def add(bot, update, args):
@@ -110,9 +123,9 @@ def add(bot, update, args):
     day = start
     if start and end:
         while day <= end:
-            for time in CLASSES_HOURS:
+            for place, time in product(PLACES, CLASSES_HOURS):
                 try:
-                    db.execute_insert(db.add_classes_dates_sql, (day.isoformat(), time, True))
+                    db.execute_insert(db.add_classes_dates_sql, (place, day.isoformat(), time, True))
                 except:
                     bot.send_message(chat_id=update.message.chat_id, text="Косяк! Что-то не получилось")
                     return
@@ -128,7 +141,7 @@ def schedule(bot, update):
                          text="Только мамке покажу расписание!")
         return
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
-    lines = [" ".join((str(line[0]), line[1], line[2], "({})".format(line[4]), line[3])) for line in schedule]
+    lines = [" ".join((line[0], str(line[1]), line[2], line[3], "({})".format(line[5]), line[4])) for line in schedule]
     text = "\n".join(lines)
     bot.send_message(chat_id=update.message.chat_id, text=text)
 
@@ -185,7 +198,7 @@ def text_msg(bot, update):
         bot.send_message(chat_id=update.message.chat_id, text='Я не совсем понял.')
 
 
-def ask_date(bot, update):
+def ask_place(bot, update):
     # check for number of subscriptions for the user, not more than 2
     user_id = update.effective_user.id
     subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
@@ -193,49 +206,68 @@ def ask_date(bot, update):
         bot.send_message(chat_id=update.message.chat_id,
                          text="У тебя уже есть две записи. Сначала отмени другую запись.")
         return ConversationHandler.END
-    open_dates = db.execute_select(db.get_open_classes_dates_sql, (dt.date.today().isoformat(),))
-    # show count of open time slots per day
-    keyboard = [[InlineKeyboardButton("{} (свободно слотов {})".format(date, count),
-                                      callback_data=str(date))] for date, count in open_dates]
+    keyboard = [[InlineKeyboardButton(place, callback_data=place)] for place in PLACES]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id,
-                     text="На когда?",
+                     text="На какую площадку хочешь?",
                      reply_markup=reply_markup)
-    return DATE
+    return ASK_PLACE_STATE
 
 
-def store_date(bot, update, user_data):
-    match = date_regex.match(update.message.text)
+def ask_date(bot, update, user_data):
+    match = place_regex.match(update.message.text.strip())
+    place = match.group(1)
+    user_data['place'] = place
+    open_dates = db.execute_select(db.get_open_classes_dates_sql, (dt.date.today().isoformat(), place))
+    if open_dates:
+        # show count of open time slots per day in the given place
+        keyboard = [[InlineKeyboardButton("{} (свободно слотов {})".format(date, count),
+                                          callback_data=str(date))] for date, count in open_dates]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="На когда?",
+                         reply_markup=reply_markup)
+        return ASK_DATE_STATE
+    else:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Нету открытых дат для записи.")
+        return ConversationHandler.END
+
+
+def ask_time(bot, update, user_data):
+    match = date_regex.match(update.message.text.strip())
     if not match:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Плхоже, это была некорректная дата. Попробуй еще раз.")
         return ConversationHandler.END
     date = match.group(1)
     user_data['date'] = date
-    times = db.execute_select(db.get_open_classes_time_sql, (date,))
-    times = map(lambda x: x[0], times)
+    place = user_data['place']
+    time_slots = db.execute_select(db.get_open_classes_time_sql, (date, place))
+    time_slots = map(lambda x: x[0], time_slots)
     # TODO: show count of open time slots
-    keyboard = [[InlineKeyboardButton(str(time), callback_data=str(time))] for time in times]
+    keyboard = [[InlineKeyboardButton(str(time), callback_data=str(time))] for time in time_slots]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id,
                      text="Теперь выбери время",
                      reply_markup=reply_markup)
-    return TIME
+    return ASK_TIME_STATE
 
 
-def store_time(bot, update, user_data):
-    match = time_regex.match(update.message.text)
+def store_sign_up(bot, update, user_data):
+    match = time_regex.match(update.message.text.strip())
     if not match:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Плхоже, это было некорректное время. Попробуй еще раз.")
         return ConversationHandler.END
     date = user_data['date']
+    place = user_data['place']
     time = match.string
     user_id = update.effective_user.id
-    class_id = db.execute_select(db.get_class_id_sql, (date, time))[0][0]
+    class_id = db.execute_select(db.get_class_id_sql, (date, time, place))[0][0]
     db.execute_insert(db.set_user_subscription_sql, (user_id, class_id))
     # check if class is full (PEOPLE_PER_TIME_SLOT)
-    people_count = db.execute_select(db.get_people_count_per_time_slot_sql, (date, time))[0][0]
+    people_count = db.execute_select(db.get_people_count_per_time_slot_sql, (date, time, place))[0][0]
     if people_count > PEOPLE_PER_TIME_SLOT:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Упс, на этот тайм слот уже записалось больше {} человек. "
@@ -253,38 +285,71 @@ def store_time(bot, update, user_data):
 def ask_unsubscribe(bot, update):
     user_id = update.effective_user.id
     user_subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
-    keyboard = [[InlineKeyboardButton("{} {}".format(date, time), callback_data=(date, time))]
-                for date, time in user_subs]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
-    bot.send_message(chat_id=update.message.chat_id,
-                     text="Какое отменяем?",
-                     reply_markup=reply_markup)
-    return UNSUBSCRIBE
+    if user_subs:
+        keyboard = [[InlineKeyboardButton("{} {} {}".format(place, date, time), callback_data=(str(date), time))]
+                    for place, date, time in user_subs]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Какое отменяем?",
+                         reply_markup=reply_markup)
+        return RETURN_UNSUBSCRIBE_STATE
+    else:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Нечего отменять, у тебя нет записи на ближайшие занятия.")
+        return ConversationHandler.END
 
 
-def unsubscribe(bot, update, user_data):
+def unsubscribe(bot, update):
     try:
-        date, time = update.message.text.split(" ")
+        place, date, time = update.message.text.split(" ")
         user_id = update.effective_user.id
-        class_id = db.execute_select(db.get_class_id_sql, (date, time))[0][0]
+        class_id = db.execute_select(db.get_class_id_sql, (date, time, place))[0][0]
         db.execute_insert(db.delete_user_subscription_sql, (user_id, class_id))
-        people_count = db.execute_select(db.get_people_count_per_time_slot_sql, (date, time))[0][0]
+        people_count = db.execute_select(db.get_people_count_per_time_slot_sql, (date, time, place))[0][0]
         if people_count < PEOPLE_PER_TIME_SLOT:
             # set class open = True
             db.execute_insert(db.set_class_state, (OPEN, class_id))
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Ok, удалил запись на {} {}".format(date, time))
-    except ValueError:
+                         text="Ok, удалил запись на {} {} {}".format(place, date, time))
+    except (ValueError, DBError):
         bot.send_message(chat_id=update.message.chat_id,
                          text="Что-то пошло не так. Попробуй еще раз.")
+    return ConversationHandler.END
+
+
+def store_first_name(bot, update):
+    user_id = update.effective_user.id
+    name = update.message.text.strip().split()[0]
+    if not name:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Я немного не понял. Просто напиши свое имя.")
+        return ASK_FIRST_NAME_STATE
+    db.execute_insert(db.update_user_first_name_sql, (name, user_id))
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Теперь напиши пожалуйста фамилию.")
+    return ASK_LAST_NAME_STATE
+
+
+def store_last_name(bot, update):
+    user_id = update.effective_user.id
+    surname = update.message.text.strip().split()[0]
+    if not surname:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Я немного не понял. Просто напиши свою фамилию.")
+        return ASK_LAST_NAME_STATE
+    db.execute_insert(db.update_user_last_name_sql, (surname, user_id))
+    user = db.execute_select(db.get_user_sql, (user_id,))[0]
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Спасибо. Я тебя записал. {} {}, правильно? "
+                     "Используй команду /start чтобы изменить данные о себе.".format(user[2], user[3]))
     return ConversationHandler.END
 
 
 def end_conversation(bot, update):
     user = update.message.from_user
     logger.debug("User %s canceled the conversation.", user.first_name)
-    update.message.reply_text('Ок. На том и порешим пока.')
-
+    bot.send_message(chat_id=update.message.chat_id,
+                     text='Ок. На том и порешим пока.')
     return ConversationHandler.END
 
 
@@ -293,36 +358,48 @@ def run_bot():
     updater = Updater(token=BOT_TOKEN, persistence=pp)
     dispatcher = updater.dispatcher
 
-    start_cmd_handler = CommandHandler('start', start_cmd)
     add_classes_handler = CommandHandler('add', add, pass_args=True)
     add_schedule_handler = CommandHandler('schedule', schedule)
     remove_schedule_handler = CommandHandler('remove', remove, pass_args=True)
     unknown_handler = MessageHandler(Filters.command, unknown)
 
-    dispatcher.add_handler(start_cmd_handler)
+    # Add user identity handler on /start command
+    identity_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start_cmd)],
+        states={
+            ASK_FIRST_NAME_STATE: [MessageHandler(Filters.text, store_first_name)],
+            ASK_LAST_NAME_STATE: [MessageHandler(Filters.text, store_last_name)],
+        },
+        fallbacks=[CommandHandler('cancel', end_conversation)],
+        name="identity_conversation",
+        persistent=True
+    )
+
+    dispatcher.add_handler(identity_handler)
     dispatcher.add_handler(add_classes_handler)
     dispatcher.add_handler(add_schedule_handler)
     dispatcher.add_handler(remove_schedule_handler)
     dispatcher.add_handler(unknown_handler)
 
-    # Add subscribe handler with the states DATE, TIME
-    subscribe_conv_handler = ConversationHandler(
-        entry_points=[RegexHandler(".*([Зз]апиши меня).*", ask_date)],
+    # Add subscribe handler with the states ASK_DATE_STATE, ASK_TIME_STATE
+    sign_up_conv_handler = ConversationHandler(
+        entry_points=[RegexHandler(".*([Зз]апиши меня).*", ask_place)],
         states={
-            DATE: [MessageHandler(Filters.text, store_date, pass_user_data=True)],
-            TIME: [MessageHandler(Filters.text, store_time, pass_user_data=True)],
+            ASK_PLACE_STATE: [MessageHandler(Filters.text, ask_date, pass_user_data=True)],
+            ASK_DATE_STATE: [MessageHandler(Filters.text, ask_time, pass_user_data=True)],
+            ASK_TIME_STATE: [MessageHandler(Filters.text, store_sign_up, pass_user_data=True)],
         },
         fallbacks=[CommandHandler('cancel', end_conversation)],
         name="subscribe_conversation",
         persistent=True
     )
-    dispatcher.add_handler(subscribe_conv_handler)
+    dispatcher.add_handler(sign_up_conv_handler)
 
     # Add unsubscribe handler with the states
     unsubscribe_conv_handler = ConversationHandler(
         entry_points=[RegexHandler(".*([Оо]тпиши меня|[Оо]тмени запись).*", ask_unsubscribe)],
         states={
-            UNSUBSCRIBE: [MessageHandler(Filters.text, unsubscribe, pass_user_data=True)],
+            RETURN_UNSUBSCRIBE_STATE: [MessageHandler(Filters.text, unsubscribe)],
         },
         fallbacks=[CommandHandler('cancel', end_conversation)],
         name="unsubscribe_conversation",

@@ -18,10 +18,11 @@ CREATE TABLE IF NOT EXISTS users (
 create_classes_table = """
 CREATE TABLE IF NOT EXISTS classes (
  id SERIAL PRIMARY KEY,
+ place text NOT NULL,
  date DATE NOT NULL,
  time text NOT NULL,
  open bool NOT NULL,
- UNIQUE(date, time)
+ UNIQUE(place, date, time)
 );
 """
 
@@ -35,9 +36,9 @@ CREATE TABLE IF NOT EXISTS schedule (
 """
 
 add_classes_dates_sql = """
-INSERT INTO classes (date, time, open)
-VALUES (%s,%s,%s);
- """
+INSERT INTO classes (place, date, time, open)
+VALUES (%s,%s,%s,%s);
+"""
 
 get_user_sql = """
 SELECT * FROM users WHERE id=%s;
@@ -57,15 +58,31 @@ WHERE
     id = %s;
 """
 
+update_user_first_name_sql = """
+UPDATE users
+SET first_name = %s
+WHERE
+    id = %s;
+"""
+
+update_user_last_name_sql = """
+UPDATE users
+SET last_name = %s
+WHERE
+    id = %s;
+"""
+
 get_open_classes_dates_sql = """
 SELECT date, count(*) from classes 
-WHERE date > %s AND open is true
+WHERE date > %s
+    AND open is true
+    AND place = %s
 GROUP BY date
 ORDER BY date;
 """
 
 get_open_classes_time_sql = """
-SELECT time FROM classes WHERE date = %s AND open is true;
+SELECT time FROM classes WHERE date = %s AND place = %s AND open is true;
 """
 
 set_user_subscription_sql = """
@@ -73,7 +90,7 @@ INSERT INTO schedule (user_id, class_id) VALUES (%s,%s);
 """
 
 get_class_id_sql = """
-SELECT id from classes WHERE date = %s AND time = %s;
+SELECT id from classes WHERE date = %s AND time = %s AND place = %s;
 """
 
 get_classes_ids_sql = """
@@ -81,16 +98,16 @@ SELECT id from classes WHERE date = %s;
 """
 
 get_full_schedule_sql = """
-SELECT date, time, first_name, last_name, nick_name 
-FROM classes cl 
-JOIN schedule sch ON cl.id=sch.class_id 
+SELECT place, date, time, first_name, last_name, nick_name
+FROM classes cl
+JOIN schedule sch ON cl.id=sch.class_id
 JOIN users us ON us.id=sch.user_id
-WHERE cl.date>%s 
+WHERE cl.date>%s
 ORDER BY cl.date, cl.time;
 """
 
 get_user_subscriptions_sql = """
-SELECT cl.date, cl.time FROM schedule sch 
+SELECT cl.place, cl.date, cl.time FROM schedule sch
 JOIN classes cl ON sch.class_id=cl.id
 WHERE sch.user_id = %s and cl.date >= %s;
 """
@@ -100,9 +117,9 @@ DELETE FROM schedule WHERE user_id = %s AND class_id = %s;
 """
 
 get_people_count_per_time_slot_sql = """
-SELECT COUNT(*) FROM schedule sch 
+SELECT COUNT(*) FROM schedule sch
 JOIN classes cl ON sch.class_id=cl.id
-WHERE cl.date = %s AND cl.TIME = %s;
+WHERE cl.date = %s AND cl.time = %s AND cl.place = %s;
 """
 
 set_class_state = """
