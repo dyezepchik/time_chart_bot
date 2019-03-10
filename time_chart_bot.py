@@ -23,6 +23,7 @@ import json
 import logging
 import re
 
+from collections import defaultdict
 from itertools import product
 
 import apiai
@@ -141,8 +142,22 @@ def schedule(bot, update):
                          text="Только мамке покажу расписание!")
         return
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
-    lines = [" ".join((line[0], str(line[1]), line[2], line[3], "({})".format(line[5]), line[4])) for line in schedule]
-    text = "\n".join(lines)
+    user_ids = list(set(map(lambda x: x[6], schedule)))
+    user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
+    user_count = dict(user_count)
+    lines = [" ".join((line[0], str(line[1]), line[2],  # place, date, time
+                       str(line[3]), "({})".format(line[5]), str(line[4]),  # Name (Nickname) Last Name
+                       str(user_count.get(line[6], 0))))  # visit count
+             for line in schedule]
+    # partition by places
+    records_by_place = defaultdict(list)
+    for place in PLACES:
+        for line in lines:
+            if place in line:
+                records_by_place[place].append(line)
+    text = ""
+    for _, lines in records_by_place.items():
+        text += "\n".join(lines) + "\n\n"
     bot.send_message(chat_id=update.message.chat_id, text=text)
 
 

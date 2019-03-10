@@ -98,12 +98,20 @@ SELECT id from classes WHERE date = %s;
 """
 
 get_full_schedule_sql = """
-SELECT place, date, time, first_name, last_name, nick_name
+SELECT cl.place, cl.date, cl.time, us.first_name, us.last_name, us.nick_name, us.id
 FROM classes cl
 JOIN schedule sch ON cl.id=sch.class_id
 JOIN users us ON us.id=sch.user_id
 WHERE cl.date>%s
 ORDER BY cl.place, cl.date, cl.time;
+"""
+
+get_user_visits_count = """
+SELECT user_id, count(1)
+FROM schedule sch
+JOIN classes cl ON cl.id=sch.class_id
+WHERE cl.date<%s AND user_id = ANY(%s)
+GROUP BY user_id;
 """
 
 get_user_subscriptions_sql = """
