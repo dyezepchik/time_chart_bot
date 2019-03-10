@@ -146,6 +146,14 @@ def schedule(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text=text)
 
 
+def remove_schedules_by_date(date):
+    # remove schedule records for classes for given date
+    classes_ids = db.execute_select(db.get_classes_ids_sql, (date,))
+    classes_ids = list(map(lambda x: x[0], classes_ids))
+    db.execute_insert(db.get_delete_schedules_for_classes_sql, (classes_ids,))
+    db.execute_insert(db.get_delete_classes_sql, (classes_ids,))
+
+
 def remove(bot, update, args):
     """Remove dates of classes"""
     user_id = update.effective_user.id
@@ -154,20 +162,47 @@ def remove(bot, update, args):
                          text="Только мамке можно удалять расписание!")
         return
     if len(args) == 2:
-        # remove range
-        pass
+        try:
+            start = dt.datetime.strptime(args[0], DATE_FORMAT).date()
+            end = dt.datetime.strptime(args[1], DATE_FORMAT).date()
+        except (ValueError, TypeError) as e:
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01.")
+            return
+        if start > end:
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Нет, ну дата начала должна быть раньше даты окончания. "
+                                  "Попробуй еще раз.")
+            return
+        elif (end - start).days > 5:
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Можно удалять не больше пяти дат за раз. "
+                                  "Попробуй еще раз.")
+            return
+        elif start < dt.date.today():
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Дата начала уже в прошлом. Нужно указывать даты в будущем. "
+                                  "Попробуй еще раз.")
+            return
+        day = start
+        if not start or not end:
+            bot.send_message(chat_id=update.message.chat_id, text="Косяк! Что-то не получилось.")
+            return
+        while day <= end:
+            try:
+                remove_schedules_by_date(day)
+            except DBError:
+                bot.send_message(chat_id=update.message.chat_id, text="Косяк! Что-то не получилось.")
+                return
+            day += dt.timedelta(days=1)
     elif len(args) == 1:
         try:
             date = dt.datetime.strptime(args[0], DATE_FORMAT).date()
         except (ValueError, TypeError) as e:
             bot.send_message(chat_id=update.message.chat_id,
-                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01")
+                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01.")
             return
-        # remove schedule records for classes for given date
-        classes_ids = db.execute_select(db.get_classes_ids_sql, (date,))
-        classes_ids = list(map(lambda x: x[0], classes_ids))
-        db.execute_insert(db.get_delete_schedules_for_classes_sql, (classes_ids,))
-        db.execute_insert(db.get_delete_classes_sql, (classes_ids,))
+        remove_schedules_by_date(date)
     else:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Непонятно что удалять.")

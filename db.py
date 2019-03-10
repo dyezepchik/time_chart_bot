@@ -103,7 +103,7 @@ FROM classes cl
 JOIN schedule sch ON cl.id=sch.class_id
 JOIN users us ON us.id=sch.user_id
 WHERE cl.date>%s
-ORDER BY cl.date, cl.time;
+ORDER BY cl.place, cl.date, cl.time;
 """
 
 get_user_subscriptions_sql = """
