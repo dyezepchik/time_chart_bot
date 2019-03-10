@@ -2,7 +2,8 @@
 
 Commands:
  - /start
-    On start bot checks if user exists in database already and adds him if not
+    On start bot checks if user exists in database already and adds him if not.
+    After this asks user to introduce himself.
  - /add 2018-04-29 [2018-05-04]
     Adds a new schedule for an ongoing period between start and end dates
     Args: date ot dates range
@@ -13,8 +14,9 @@ Commands:
     Args: date or dates range
 
 Conversation:
- To ask bot to subscribe you to a classes write to it: "З(з)апиши меня" starting with a capital or lowercase letter.
- To ask bot to unsubscribe you from a class write: О[о]тпиши меня or О[о]тмени запись.
+ To ask bot to subscribe you to a classes write to it: "З(з)апиши меня" starting
+ with a capital or lowercase letter. To ask bot to unsubscribe you from a class
+ write: О[о]тпиши меня or О[о]тмени запись.
  Then follow it's instructions.
 """
 # TODO: Try pendulum https://github.com/sdispater/pendulum
