@@ -4,8 +4,7 @@ from functools import wraps
 
 LIST_OF_ADMINS = [
     512834590,  # my id
-    616873314,
-    # int(os.environ['ADMIN_ID']),
+    int(os.environ['ADMIN_ID']),
 ]
 
 

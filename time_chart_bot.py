@@ -75,7 +75,7 @@ time_regex = re.compile("^(" + "|".join(CLASSES_HOURS) + ")$")
 # commands
 def start_cmd(bot, update):
     user_id = update.effective_user.id
-    nick = update.effective_user.username
+    nick = update.effective_user.username or ""
     first_name = update.effective_user.first_name
     last_name = update.effective_user.last_name
     db.upsert_user(user_id, nick, first_name, last_name)
