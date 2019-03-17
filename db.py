@@ -120,6 +120,12 @@ JOIN classes cl ON sch.class_id=cl.id
 WHERE sch.user_id = %s and cl.date >= %s;
 """
 
+get_user_subscriptions_for_date_sql = """
+SELECT cl.place, cl.date, cl.time FROM schedule sch
+JOIN classes cl ON sch.class_id=cl.id
+WHERE sch.user_id = %s and cl.date = %s;
+"""
+
 delete_user_subscription_sql = """
 DELETE FROM schedule WHERE user_id = %s AND class_id = %s;
 """

@@ -80,10 +80,11 @@ def start_cmd(bot, update):
     last_name = update.effective_user.last_name
     db.upsert_user(user_id, nick, first_name, last_name)
     bot.send_message(chat_id=update.message.chat_id,
-                     text="Привет! Я бот вместо мамки. Буду вас записывать на занятия. "
+                     text="Привет! Я MD-помошник. Буду вас записывать на занятия. "
                           "Записаться можно при наличии времени в расписании, написав мне \"запиши меня\". "
-                          "И я предложу выбрать из тех дат, которые остались свободными."
-                          "А сейчас представься пожалуйста, чтобы я знал, кого я записываю на занятия."
+                          "И я предложу выбрать из тех дат, которые остались свободными. "
+                          "Удалить запись можно написав мне \"Отпиши меня\" или \"Отмени запись\. "
+                          "А сейчас представься пожалуйста, чтобы я знал, кого я записываю на занятия. "
                           "Напиши свое имя.")
     return ASK_FIRST_NAME_STATE
 
@@ -293,6 +294,14 @@ def ask_time(bot, update, user_data):
                          text="Плхоже, это была некорректная дата. Попробуй еще раз.")
         return ConversationHandler.END
     date = match.group(1)
+    # check for existing subscription for the date, 2 subs are not allowed per user per date
+    user_id = update.effective_user.id
+    subs = db.execute_select(db.get_user_subscriptions_for_date_sql, (user_id, date))
+    if len(subs) > 0:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="У тебя уже есть запись на {}. "
+                              "Чтобы записаться отмени ранее сделанную запись.".format(date))
+        return ConversationHandler.END
     user_data['date'] = date
     place = user_data['place']
     time_slots = db.execute_select(db.get_open_classes_time_sql, (date, place))
@@ -330,7 +339,7 @@ def store_sign_up(bot, update, user_data):
             # set class open = False
             db.execute_insert(db.set_class_state, (CLOSED, class_id))
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Ok, записал на {} {}".format(date, time))
+                         text="Ok, записал на {} {} {}".format(place, date, time))
     return ConversationHandler.END
 
 
