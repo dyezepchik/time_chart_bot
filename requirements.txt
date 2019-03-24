@@ -12,3 +12,4 @@ git+git://github.com/python-telegram-bot/python-telegram-bot.git@c03160c07f89e30
 six==1.11.0
 tornado==6.0a1
 psycopg2-binary==2.7.7
+XlsxWriter==1.1.5

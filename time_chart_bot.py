@@ -29,6 +29,7 @@ from collections import defaultdict
 from itertools import product
 
 import apiai
+import xlsxwriter
 
 from psycopg2 import Error as DBError
 from telegram import ReplyKeyboardMarkup, InlineKeyboardButton
@@ -151,9 +152,9 @@ def schedule(bot, update):
     user_ids = list(set(map(lambda x: x[6], schedule)))
     user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
     user_count = dict(user_count)
-    lines = [" ".join((line[0], str(line[1]), line[2],  # place, date, time
+    lines = [(line[0], str(line[1]), line[2],  # place, date, time
                        str(line[3]), "({})".format(line[5]), str(line[4]),  # Name (Nickname) Last Name
-                       str(user_count.get(line[6], 0))))  # visit count
+                       str(user_count.get(line[6], 0)))  # visit count
              for line in schedule]
     # partition by places
     records_by_place = defaultdict(list)
@@ -161,10 +162,23 @@ def schedule(bot, update):
         for line in lines:
             if place in line:
                 records_by_place[place].append(line)
-    text = ""
-    for _, lines in records_by_place.items():
-        text += "\n".join(lines) + "\n\n"
-    bot.send_message(chat_id=update.message.chat_id, text=text)
+    # text = ""
+    # for _, lines in records_by_place.items():
+    #     text += "\n".join(lines) + "\n\n"
+    # bot.send_message(chat_id=update.message.chat_id, text=text)
+    workbook = xlsxwriter.Workbook('tmp/schedule.xlsx')
+    worksheet = workbook.add_worksheet()
+    row = 0
+    for _, records in records_by_place.items():
+        row += 1
+        for line in records:
+            col = 0
+            for val in line:
+                worksheet.write(row, col, val)
+                col += 1
+            row += 1
+    workbook.close()
+    bot.send_document(chat_id=update.message.chat_id, document=open('tmp/schedule.xlsx', 'rb'))
 
 
 def remove_classes(date, time=None, place=None):
