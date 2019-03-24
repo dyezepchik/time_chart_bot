@@ -9,7 +9,7 @@ Commands:
     Args: date ot dates range
  - /schedule
     Gives the full schedule of your upcoming classes
- - /remove 2018-04-29 [2018-05-03]
+ - /remove 2018-04-29 [2018-05-03] [12:00]
     Removes all schedule and upcoming classes for the given date(s)
     Args: date or dates range
 
@@ -61,7 +61,8 @@ ASK_PLACE_STATE,\
     ASK_TIME_STATE,\
     RETURN_UNSUBSCRIBE_STATE,\
     ASK_FIRST_NAME_STATE, \
-    ASK_LAST_NAME_STATE = range(6)
+    ASK_LAST_NAME_STATE, \
+    REMOVE_SCHEDULE_STATE = range(7)
 
 # classes states
 CLOSED, OPEN = False, True
@@ -89,12 +90,25 @@ def start_cmd(bot, update):
     return ASK_FIRST_NAME_STATE
 
 
+def check_dates(start, end):
+    """Check given dates correctness"""
+    if not start or not end:
+        return 1, "Косяк! Что-то не получилось."
+    if start > end:
+        return 1, "Нет, ну дата начала должна быть раньше даты окончания. Попробуй еще раз."
+    elif (end - start).days > 6:
+        return 1, "Можно удалять не больше пяти дат за раз. Попробуй еще раз."
+    elif start < dt.date.today():
+        return 1, "Дата начала уже в прошлом. Нужно указывать даты в будущем. Попробуй еще раз."
+    return None, None
+
+
 def add(bot, update, args):
     start, end = None, None
     user_id = update.effective_user.id
     if user_id not in LIST_OF_ADMINS:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Ага, счас! Только мамке можно!")
+                         text="Ага, счас! Только администратору можно!")
         return
     if len(args) == 2:
         try:
@@ -104,20 +118,9 @@ def add(bot, update, args):
             bot.send_message(chat_id=update.message.chat_id,
                              text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01")
             return
-        if start > end:
-            bot.send_message(chat_id=update.message.chat_id,
-                             text="Нет, ну дата начала должна быть все же раньше даты окончания. "
-                                  "Попробуй еще раз.")
-            return
-        elif (end-start).days > 5:
-            bot.send_message(chat_id=update.message.chat_id,
-                             text="Так, у нас многовато дней для записи, договаривались не больше пяти. "
-                                  "Попробуй еще раз.")
-            return
-        elif start < dt.date.today():
-            bot.send_message(chat_id=update.message.chat_id,
-                             text="Дата начала уже в прошлом. Нужно указывать даты в будущем. "
-                                  "Попробуй еще раз.")
+        error, msg = check_dates(start, end)
+        if error:
+            bot.send_message(chat_id=update.message.chat_id, text=msg)
             return
     else:
         bot.send_message(chat_id=update.message.chat_id,
@@ -142,7 +145,7 @@ def schedule(bot, update):
     user_id = update.effective_user.id
     if user_id not in LIST_OF_ADMINS:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Только мамке покажу расписание!")
+                         text="Расписание покажу только администратору!")
         return
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
     user_ids = list(set(map(lambda x: x[6], schedule)))
@@ -164,68 +167,134 @@ def schedule(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text=text)
 
 
-def remove_schedules_by_date(date):
-    # remove schedule records for classes for given date
-    classes_ids = db.execute_select(db.get_classes_ids_sql, (date,))
-    classes_ids = list(map(lambda x: x[0], classes_ids))
+def remove_classes(date, time=None, place=None):
+    """Remove classes from schedule
+
+    :param date: the date to remove classes from
+    :param time: is optional, if given only this time is removed
+    :return: None
+    """
+    if not time:
+        # remove schedule records for classes for given date
+        classes_ids = db.execute_select(db.get_classes_ids_by_date_sql, (date, place))
+        classes_ids = list(map(lambda x: x[0], classes_ids))
+    else:
+        # remove schedule records for classes for given date and time
+        classes_ids = db.execute_select(db.get_classes_ids_by_date_time_sql, (date, time, place))
+        classes_ids = list(map(lambda x: x[0], classes_ids))
     db.execute_insert(db.get_delete_schedules_for_classes_sql, (classes_ids,))
     db.execute_insert(db.get_delete_classes_sql, (classes_ids,))
 
 
-def remove(bot, update, args):
-    """Remove dates of classes"""
+def remove_schedule_continue(bot, update, user_data):
+    response = update.message.text.strip()
+    match = place_regex.match(response)
+    # import ipdb
+    # ipdb.set_trace()
+    if match:
+        place = [match.group(1)]
+    elif response == "Обе":
+        place = PLACES
+    else:
+        bot.send_message(chat_id=update.message.chat_id, text="Не распознал площадку. Не удалось удалить.")
+        return ConversationHandler.END
+    start = user_data.get("start")
+    end = user_data.get("end")
+    time = user_data.get("time")
+    if not end:
+        end = start
+    if start and end:
+        day = start
+        while day <= end:
+            try:
+                remove_classes(day, time, place)
+            except DBError:
+                bot.send_message(chat_id=update.message.chat_id, text="Косяк! Что-то не получилось.")
+                return ConversationHandler.END
+            day += dt.timedelta(days=1)
+    else:
+        bot.send_message(chat_id=update.message.chat_id, text="Что-то пошло не так. Непонятно что удалять.")
+        return ConversationHandler.END
+    message = "Ок, удалил расписание на {}".format(start)
+    if end != start:
+        message += " - {}".format(end)
+    if time:
+        message += " {}".format(time)
+    message += " на площадку {}.".format(place)
+    bot.send_message(chat_id=update.message.chat_id, text=message)
+    return ConversationHandler.END
+
+
+def remove(bot, update, args, user_data):
+    """Set dates of classes to remove"""
+    # init vars
+    start, end, time = None, None, None
     user_id = update.effective_user.id
     if user_id not in LIST_OF_ADMINS:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Только мамке можно удалять расписание!")
-        return
-    if len(args) == 2:
+                         text="Только администратор удалять расписание!")
+        return ConversationHandler.END
+    if len(args) == 3:  # start_date end_date time_slot
+        try:
+            start = dt.datetime.strptime(args[0], DATE_FORMAT).date()
+            end = dt.datetime.strptime(args[1], DATE_FORMAT).date()
+            match = time_regex.match(args[2])
+            time = match.group(1)
+        except (AttributeError, TypeError, ValueError) as e:
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Ой, наверное дата или время в каком-то кривом формате. "
+                                  "Попробуй еще раз так 2019-05-01 2019-05-02 12:00.")
+            return ConversationHandler.END
+        error, msg = check_dates(start, end)
+        if error:
+            bot.send_message(chat_id=update.message.chat_id, text=msg)
+            return ConversationHandler.END
+    elif len(args) == 2:  # start_date end_date | date time_slot
         try:
             start = dt.datetime.strptime(args[0], DATE_FORMAT).date()
             end = dt.datetime.strptime(args[1], DATE_FORMAT).date()
         except (ValueError, TypeError) as e:
-            bot.send_message(chat_id=update.message.chat_id,
-                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01.")
-            return
-        if start > end:
-            bot.send_message(chat_id=update.message.chat_id,
-                             text="Нет, ну дата начала должна быть раньше даты окончания. "
-                                  "Попробуй еще раз.")
-            return
-        elif (end - start).days > 5:
-            bot.send_message(chat_id=update.message.chat_id,
-                             text="Можно удалять не больше пяти дат за раз. "
-                                  "Попробуй еще раз.")
-            return
-        elif start < dt.date.today():
-            bot.send_message(chat_id=update.message.chat_id,
-                             text="Дата начала уже в прошлом. Нужно указывать даты в будущем. "
-                                  "Попробуй еще раз.")
-            return
-        day = start
-        if not start or not end:
-            bot.send_message(chat_id=update.message.chat_id, text="Косяк! Что-то не получилось.")
-            return
-        while day <= end:
             try:
-                remove_schedules_by_date(day)
-            except DBError:
-                bot.send_message(chat_id=update.message.chat_id, text="Косяк! Что-то не получилось.")
-                return
-            day += dt.timedelta(days=1)
-    elif len(args) == 1:
+                start = dt.datetime.strptime(args[0], DATE_FORMAT).date()
+                match = time_regex.match(args[1])
+                time = match.group(1)
+            except:
+                bot.send_message(chat_id=update.message.chat_id,
+                                 text="Ошибка! Наверное дата или время в каком-то кривом формате."
+                                      " Попробуй еще раз.")
+                return ConversationHandler.END
+        if start and end:
+            error, msg = check_dates(start, end)
+            if error:
+                bot.send_message(chat_id=update.message.chat_id, text=msg)
+                return ConversationHandler.END
+        else:
+            bot.send_message(chat_id=update.message.chat_id, text="Что-то некорректно с датами или временем."
+                                                                  " Попробуй еще раз.")
+    elif len(args) == 1:  # date
         try:
             date = dt.datetime.strptime(args[0], DATE_FORMAT).date()
         except (ValueError, TypeError) as e:
             bot.send_message(chat_id=update.message.chat_id,
-                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так 2019-05-01.")
-            return
-        remove_schedules_by_date(date)
+                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так: 2019-05-01.")
+            return ConversationHandler.END
+        if date < dt.date.today():
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Вы пытаетесь удалить расписание на дату, которая уже в прошлом.")
+            return ConversationHandler.END
     else:
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="Непонятно что удалять.")
-        return
-    bot.send_message(chat_id=update.message.chat_id, text="Ок, удалил расписание на {}".format(date))
+        bot.send_message(chat_id=update.message.chat_id, text="Непонятно что удалять.")
+        return ConversationHandler.END
+
+    user_data["start"] = start
+    user_data["end"] = end
+    user_data["time"] = time
+
+    choises = PLACES + ["Обе"]
+    keyboard = [[InlineKeyboardButton(place, callback_data=place)] for place in choises]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    bot.send_message(chat_id=update.message.chat_id, text="С какой площадки удаляем?", reply_markup=reply_markup)
+    return REMOVE_SCHEDULE_STATE
 
 
 def unknown(bot, update):
@@ -420,8 +489,16 @@ def run_bot():
     dispatcher = updater.dispatcher
 
     add_classes_handler = CommandHandler('add', add, pass_args=True)
-    add_schedule_handler = CommandHandler('schedule', schedule)
-    remove_schedule_handler = CommandHandler('remove', remove, pass_args=True)
+    show_schedule_handler = CommandHandler('schedule', schedule)
+    remove_schedule_handler = ConversationHandler(
+        entry_points=[CommandHandler('remove', remove, pass_args=True, pass_user_data=True)],
+        states={
+            REMOVE_SCHEDULE_STATE: [MessageHandler(Filters.text, remove_schedule_continue, pass_user_data=True)],
+        },
+        fallbacks=[CommandHandler('cancel', end_conversation)],
+        name="remove_schedule",
+        # persistent=True
+    )
     unknown_handler = MessageHandler(Filters.command, unknown)
 
     # Add user identity handler on /start command
@@ -433,12 +510,12 @@ def run_bot():
         },
         fallbacks=[CommandHandler('cancel', end_conversation)],
         name="identity_conversation",
-        persistent=True
+        # persistent=True
     )
 
     dispatcher.add_handler(identity_handler)
     dispatcher.add_handler(add_classes_handler)
-    dispatcher.add_handler(add_schedule_handler)
+    dispatcher.add_handler(show_schedule_handler)
     dispatcher.add_handler(remove_schedule_handler)
     dispatcher.add_handler(unknown_handler)
 
@@ -452,7 +529,7 @@ def run_bot():
         },
         fallbacks=[CommandHandler('cancel', end_conversation)],
         name="subscribe_conversation",
-        persistent=True
+        # persistent=True
     )
     dispatcher.add_handler(sign_up_conv_handler)
 
@@ -464,7 +541,7 @@ def run_bot():
         },
         fallbacks=[CommandHandler('cancel', end_conversation)],
         name="unsubscribe_conversation",
-        persistent=True
+        # persistent=True
     )
     dispatcher.add_handler(unsubscribe_conv_handler)
 

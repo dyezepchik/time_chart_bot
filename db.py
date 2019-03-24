@@ -93,8 +93,12 @@ get_class_id_sql = """
 SELECT id from classes WHERE date = %s AND time = %s AND place = %s;
 """
 
-get_classes_ids_sql = """
-SELECT id from classes WHERE date = %s;
+get_classes_ids_by_date_sql = """
+SELECT id from classes WHERE date = %s AND place = ANY(%s);
+"""
+
+get_classes_ids_by_date_time_sql = """
+SELECT id from classes WHERE date = %s AND time = %s AND place = ANY(%s);
 """
 
 get_full_schedule_sql = """
