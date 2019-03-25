@@ -166,7 +166,7 @@ def schedule(bot, update):
     # for _, lines in records_by_place.items():
     #     text += "\n".join(lines) + "\n\n"
     # bot.send_message(chat_id=update.message.chat_id, text=text)
-    workbook = xlsxwriter.Workbook('tmp/schedule.xlsx')
+    workbook = xlsxwriter.Workbook('/tmp/schedule.xlsx')
     worksheet = workbook.add_worksheet()
     row = 0
     for _, records in records_by_place.items():
@@ -178,7 +178,7 @@ def schedule(bot, update):
                 col += 1
             row += 1
     workbook.close()
-    bot.send_document(chat_id=update.message.chat_id, document=open('tmp/schedule.xlsx', 'rb'))
+    bot.send_document(chat_id=update.message.chat_id, document=open('/tmp/schedule.xlsx', 'rb'))
 
 
 def remove_classes(date, time=None, place=None):
