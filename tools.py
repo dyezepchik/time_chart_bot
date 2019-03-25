@@ -2,10 +2,7 @@ import os
 from functools import wraps
 
 
-LIST_OF_ADMINS = [
-    512834590,  # my id
-    int(os.environ['ADMIN_ID']),
-]
+LIST_OF_ADMINS = list(map(int, os.environ['ADMIN_IDS'].split(',')))
 
 
 def restricted(func):
