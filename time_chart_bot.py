@@ -12,6 +12,8 @@ Commands:
  - /remove 2018-04-29 [2018-05-03] [12:00]
     Removes all schedule and upcoming classes for the given date(s)
     Args: date or dates range
+ - /cancel
+    Cancels current conversation with bot.
 
 Conversation:
  To ask bot to subscribe you to a classes write to it: "З(з)апиши меня" starting
