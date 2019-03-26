@@ -16,8 +16,8 @@ Commands:
     Cancels current conversation with bot.
 
 Conversation:
- To ask bot to subscribe you to a classes write to it: "З(з)апиши меня" starting
- with a capital or lowercase letter. To ask bot to unsubscribe you from a class
+ To ask bot to subscribe you to a classes write it: "З(з)апиши меня" starting
+ with a capital or a lowercase letter. To ask bot to unsubscribe you from a class
  write: О[о]тпиши меня or О[о]тмени запись.
  Then follow it's instructions.
 """
@@ -486,8 +486,9 @@ def store_last_name(bot, update):
     db.execute_insert(db.update_user_last_name_sql, (surname, user_id))
     user = db.execute_select(db.get_user_sql, (user_id,))[0]
     bot.send_message(chat_id=update.message.chat_id,
-                     text="Спасибо. Я тебя записал. {} {}, правильно? "
-                     "Используй команду /start чтобы изменить данные о себе.".format(user[2], user[3]))
+                     text="Спасибо. Я тебя записал. {} {}, правильно? Если нет,
+                          " то используй команду /start чтобы изменить данные о себе."
+                          " Если всё верно, попробуй записаться. Напиши 'Запиши меня'.".format(user[2], user[3]))
     return ConversationHandler.END
 
 
