@@ -82,7 +82,7 @@ ORDER BY date;
 """
 
 get_open_classes_time_sql = """
-SELECT time FROM classes WHERE date = %s AND place = %s AND open is true;
+SELECT time FROM classes WHERE date = %s AND place = %s AND open is true ORDER BY time;
 """
 
 set_user_subscription_sql = """

@@ -24,7 +24,6 @@ Conversation:
 # TODO: Try pendulum https://github.com/sdispater/pendulum
 import datetime as dt
 import json
-import logging
 import re
 
 from collections import defaultdict
@@ -34,7 +33,7 @@ import apiai
 import xlsxwriter
 
 from psycopg2 import Error as DBError
-from telegram import ReplyKeyboardMarkup, InlineKeyboardButton
+from telegram import InlineKeyboardButton
 from telegram.ext import (
     CommandHandler,
     ConversationHandler,
@@ -48,15 +47,10 @@ from telegram.ext import (
 import db
 
 from config import DATE_FORMAT, CLASSES_HOURS, DATABASE_URL, BOT_TOKEN, PEOPLE_PER_TIME_SLOT, PLACES
-from tools import LIST_OF_ADMINS
+from tools import LIST_OF_ADMINS, logger, ReplyKeyboardWithCancel, WEEKDAYS
 
 
 conn = db.create_connection(DATABASE_URL)
-
-logging.basicConfig(filename='time_chart_bot.log',
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Conversation states
 ASK_PLACE_STATE,\
@@ -159,21 +153,28 @@ def schedule(bot, update):
                        str(user_count.get(line[6], 0)))  # visit count
              for line in schedule]
     # partition by places
-    records_by_place = defaultdict(list)
-    for place in PLACES:
-        for line in lines:
-            if place in line:
-                records_by_place[place].append(line)
+    records_by_date_place = defaultdict(list)
+    for line in lines:
+        # group by date+place
+        records_by_date_place[(line[1],line[0])].append(line)
     # text = ""
     # for _, lines in records_by_place.items():
     #     text += "\n".join(lines) + "\n\n"
     # bot.send_message(chat_id=update.message.chat_id, text=text)
     workbook = xlsxwriter.Workbook('/tmp/schedule.xlsx')
+    merge_format = workbook.add_format({'align': 'center'})
     worksheet = workbook.add_worksheet()
     row = 0
-    for _, records in records_by_place.items():
+    for key in sorted(records_by_date_place.keys()):
+        records = records_by_date_place[key]
         row += 1
-        for line in records:
+        # merge cells and write 'day date place'
+        date = dt.datetime.strptime(key[0], DATE_FORMAT).date()
+        day = WEEKDAYS[date.weekday()]
+        place = key[1]
+        worksheet.merge_range(row, 1, row, 4, '{} {} {}'.format(day, date, place), merge_format)
+        row += 1
+        for line in sorted(records, key=lambda x: x[2]):  # sort by time
             col = 0
             for val in line:
                 worksheet.write(row, col, val)
@@ -205,8 +206,6 @@ def remove_classes(date, time=None, place=None):
 def remove_schedule_continue(bot, update, user_data):
     response = update.message.text.strip()
     match = place_regex.match(response)
-    # import ipdb
-    # ipdb.set_trace()
     if match:
         place = [match.group(1)]
     elif response == "Обе":
@@ -308,7 +307,7 @@ def remove(bot, update, args, user_data):
 
     choises = PLACES + ["Обе"]
     keyboard = [[InlineKeyboardButton(place, callback_data=place)] for place in choises]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id, text="С какой площадки удаляем?", reply_markup=reply_markup)
     return REMOVE_SCHEDULE_STATE
 
@@ -319,6 +318,7 @@ def unknown(bot, update):
 
 def error(bot, update, error):
     """Log Errors caused by Updates."""
+    bot.send_message(chat_id=update.message.chat_id, text="Произошла какая-то ошибка. Попробуй еще раз.")
     logger.warning('Update "%s" caused error "%s"', update, error)
 
 
@@ -345,7 +345,7 @@ def ask_place(bot, update):
                          text="У тебя уже есть две записи. Сначала отмени другую запись.")
         return ConversationHandler.END
     keyboard = [[InlineKeyboardButton(place, callback_data=place)] for place in PLACES]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id,
                      text="На какую площадку хочешь?",
                      reply_markup=reply_markup)
@@ -361,7 +361,7 @@ def ask_date(bot, update, user_data):
         # show count of open time slots per day in the given place
         keyboard = [[InlineKeyboardButton("{} (свободно слотов {})".format(date, count),
                                           callback_data=str(date))] for date, count in open_dates]
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+        reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
         bot.send_message(chat_id=update.message.chat_id,
                          text="На когда?",
                          reply_markup=reply_markup)
@@ -393,7 +393,7 @@ def ask_time(bot, update, user_data):
     time_slots = map(lambda x: x[0], time_slots)
     # TODO: show count of open time slots
     keyboard = [[InlineKeyboardButton(str(time), callback_data=str(time))] for time in time_slots]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id,
                      text="Теперь выбери время",
                      reply_markup=reply_markup)
@@ -434,7 +434,7 @@ def ask_unsubscribe(bot, update):
     if user_subs:
         keyboard = [[InlineKeyboardButton("{} {} {}".format(place, date, time), callback_data=(str(date), time))]
                     for place, date, time in user_subs]
-        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+        reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
         bot.send_message(chat_id=update.message.chat_id,
                          text="Какое отменяем?",
                          reply_markup=reply_markup)
@@ -507,6 +507,7 @@ def run_bot():
 
     add_classes_handler = CommandHandler('add', add, pass_args=True)
     show_schedule_handler = CommandHandler('schedule', schedule)
+    cancel_handler = CommandHandler('cancel', end_conversation)
     remove_schedule_handler = ConversationHandler(
         entry_points=[CommandHandler('remove', remove, pass_args=True, pass_user_data=True)],
         states={
@@ -533,6 +534,7 @@ def run_bot():
     dispatcher.add_handler(identity_handler)
     dispatcher.add_handler(add_classes_handler)
     dispatcher.add_handler(show_schedule_handler)
+    dispatcher.add_handler(cancel_handler)
     dispatcher.add_handler(remove_schedule_handler)
     dispatcher.add_handler(unknown_handler)
 
@@ -562,7 +564,7 @@ def run_bot():
     )
     dispatcher.add_handler(unsubscribe_conv_handler)
 
-    text_msg_handler = MessageHandler(Filters.text, text_msg)
+    text_msg_handler = MessageHandler(Filters.text, unknown)
     dispatcher.add_handler(text_msg_handler)
 
     # log all errors
