@@ -156,13 +156,16 @@ def schedule(bot, update):
     records_by_date_place = defaultdict(list)
     for line in lines:
         # group by date+place
-        records_by_date_place[(line[1],line[0])].append(line)
+        records_by_date_place[(line[1], line[0])].append(line)
     # text = ""
     # for _, lines in records_by_place.items():
     #     text += "\n".join(lines) + "\n\n"
     # bot.send_message(chat_id=update.message.chat_id, text=text)
     workbook = xlsxwriter.Workbook('/tmp/schedule.xlsx')
-    merge_format = workbook.add_format({'align': 'center'})
+    merge_format = workbook.add_format({
+        'align': 'center',
+        'bold': True,
+    })
     worksheet = workbook.add_worksheet()
     row = 0
     for key in sorted(records_by_date_place.keys()):
@@ -205,6 +208,9 @@ def remove_classes(date, time=None, place=None):
 
 def remove_schedule_continue(bot, update, user_data):
     response = update.message.text.strip()
+    if response == "Отмена":
+        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        return ConversationHandler.END
     match = place_regex.match(response)
     if match:
         place = [match.group(1)]
@@ -353,7 +359,11 @@ def ask_place(bot, update):
 
 
 def ask_date(bot, update, user_data):
-    match = place_regex.match(update.message.text.strip())
+    msg = update.message.text.strip()
+    if msg == "Отмена":
+        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        return ConversationHandler.END
+    match = place_regex.match(msg)
     place = match.group(1)
     user_data['place'] = place
     open_dates = db.execute_select(db.get_open_classes_dates_sql, (dt.date.today().isoformat(), place))
@@ -373,7 +383,11 @@ def ask_date(bot, update, user_data):
 
 
 def ask_time(bot, update, user_data):
-    match = date_regex.match(update.message.text.strip())
+    msg = update.message.text.strip()
+    if msg == "Отмена":
+        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        return ConversationHandler.END
+    match = date_regex.match(msg)
     if not match:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Плхоже, это была некорректная дата. Попробуй еще раз.")
@@ -401,7 +415,11 @@ def ask_time(bot, update, user_data):
 
 
 def store_sign_up(bot, update, user_data):
-    match = time_regex.match(update.message.text.strip())
+    msg = update.message.text.strip()
+    if msg == "Отмена":
+        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        return ConversationHandler.END
+    match = time_regex.match(msg)
     if not match:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Плхоже, это было некорректное время. Попробуй еще раз.")
@@ -447,7 +465,11 @@ def ask_unsubscribe(bot, update):
 
 def unsubscribe(bot, update):
     try:
-        place, date, time = update.message.text.split(" ")
+        msg = update.message.text.strip()
+        if msg == "Отмена":
+            bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+            return ConversationHandler.END
+        place, date, time = msg.split(" ")
         user_id = update.effective_user.id
         class_id = db.execute_select(db.get_class_id_sql, (date, time, place))[0][0]
         db.execute_insert(db.delete_user_subscription_sql, (user_id, class_id))
