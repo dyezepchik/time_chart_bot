@@ -33,7 +33,7 @@ import apiai
 import xlsxwriter
 
 from psycopg2 import Error as DBError
-from telegram import InlineKeyboardButton
+from telegram import InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     CommandHandler,
     ConversationHandler,
@@ -209,7 +209,9 @@ def remove_classes(date, time=None, place=None):
 def remove_schedule_continue(bot, update, user_data):
     response = update.message.text.strip()
     if response == "Отмена":
-        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Отменил. Попробуй заново.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     match = place_regex.match(response)
     if match:
@@ -217,7 +219,9 @@ def remove_schedule_continue(bot, update, user_data):
     elif response == "Обе":
         place = PLACES
     else:
-        bot.send_message(chat_id=update.message.chat_id, text="Не распознал площадку. Не удалось удалить.")
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Не распознал площадку. Не удалось удалить.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     start = user_data.get("start")
     end = user_data.get("end")
@@ -230,11 +234,15 @@ def remove_schedule_continue(bot, update, user_data):
             try:
                 remove_classes(day, time, place)
             except DBError:
-                bot.send_message(chat_id=update.message.chat_id, text="Косяк! Что-то не получилось.")
+                bot.send_message(chat_id=update.message.chat_id,
+                                 text="Косяк! Что-то не получилось.",
+                                 reply_markup=ReplyKeyboardRemove())
                 return ConversationHandler.END
             day += dt.timedelta(days=1)
     else:
-        bot.send_message(chat_id=update.message.chat_id, text="Что-то пошло не так. Непонятно что удалять.")
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Что-то пошло не так. Непонятно что удалять.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     message = "Ок, удалил расписание на {}".format(start)
     if end != start:
@@ -242,7 +250,9 @@ def remove_schedule_continue(bot, update, user_data):
     if time:
         message += " {}".format(time)
     message += " на площадку {}.".format(place)
-    bot.send_message(chat_id=update.message.chat_id, text=message)
+    bot.send_message(chat_id=update.message.chat_id,
+                     text=message,
+                     reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 
@@ -253,7 +263,8 @@ def remove(bot, update, args, user_data):
     user_id = update.effective_user.id
     if user_id not in LIST_OF_ADMINS:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Только администратор удалять расписание!")
+                         text="Только администратор удалять расписание!",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     if len(args) == 3:  # start_date end_date time_slot
         try:
@@ -264,11 +275,14 @@ def remove(bot, update, args, user_data):
         except (AttributeError, TypeError, ValueError) as e:
             bot.send_message(chat_id=update.message.chat_id,
                              text="Ой, наверное дата или время в каком-то кривом формате. "
-                                  "Попробуй еще раз так 2019-05-01 2019-05-02 12:00.")
+                                  "Попробуй еще раз так 2019-05-01 2019-05-02 12:00.",
+                             reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
         error, msg = check_dates(start, end)
         if error:
-            bot.send_message(chat_id=update.message.chat_id, text=msg)
+            bot.send_message(chat_id=update.message.chat_id,
+                             text=msg,
+                             reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
     elif len(args) == 2:  # start_date end_date | date time_slot
         try:
@@ -282,29 +296,37 @@ def remove(bot, update, args, user_data):
             except:
                 bot.send_message(chat_id=update.message.chat_id,
                                  text="Ошибка! Наверное дата или время в каком-то кривом формате."
-                                      " Попробуй еще раз.")
+                                      " Попробуй еще раз.",
+                                 reply_markup=ReplyKeyboardRemove())
                 return ConversationHandler.END
         if start and end:
             error, msg = check_dates(start, end)
             if error:
-                bot.send_message(chat_id=update.message.chat_id, text=msg)
+                bot.send_message(chat_id=update.message.chat_id,
+                                 text=msg,
+                                 reply_markup=ReplyKeyboardRemove())
                 return ConversationHandler.END
         else:
-            bot.send_message(chat_id=update.message.chat_id, text="Что-то некорректно с датами или временем."
-                                                                  " Попробуй еще раз.")
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Что-то некорректно с датами или временем. Попробуй еще раз.",
+                             reply_markup=ReplyKeyboardRemove())
     elif len(args) == 1:  # date
         try:
             date = dt.datetime.strptime(args[0], DATE_FORMAT).date()
         except (ValueError, TypeError) as e:
             bot.send_message(chat_id=update.message.chat_id,
-                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так: 2019-05-01.")
+                             text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так: 2019-05-01.",
+                             reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
         if date < dt.date.today():
             bot.send_message(chat_id=update.message.chat_id,
-                             text="Вы пытаетесь удалить расписание на дату, которая уже в прошлом.")
+                             text="Вы пытаетесь удалить расписание на дату, которая уже в прошлом.",
+                             reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
     else:
-        bot.send_message(chat_id=update.message.chat_id, text="Непонятно что удалять.")
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Непонятно что удалять.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     user_data["start"] = start
@@ -348,7 +370,8 @@ def ask_place(bot, update):
     subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
     if len(subs) > 1:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="У тебя уже есть две записи. Сначала отмени другую запись.")
+                         text="У тебя уже есть две записи. Сначала отмени другую запись.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     keyboard = [[InlineKeyboardButton(place, callback_data=place)] for place in PLACES]
     reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
@@ -361,7 +384,9 @@ def ask_place(bot, update):
 def ask_date(bot, update, user_data):
     msg = update.message.text.strip()
     if msg == "Отмена":
-        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Отменил. Попробуй заново.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     match = place_regex.match(msg)
     place = match.group(1)
@@ -369,8 +394,8 @@ def ask_date(bot, update, user_data):
     open_dates = db.execute_select(db.get_open_classes_dates_sql, (dt.date.today().isoformat(), place))
     if open_dates:
         # show count of open time slots per day in the given place
-        keyboard = [[InlineKeyboardButton("{} (свободно слотов {})".format(date, count),
-                                          callback_data=str(date))] for date, count in open_dates]
+        keyboard = [[InlineKeyboardButton("{} (свободно слотов {})".format(date, count), callback_data=str(date))]
+                    for date, count in open_dates]
         reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
         bot.send_message(chat_id=update.message.chat_id,
                          text="На когда?",
@@ -378,19 +403,23 @@ def ask_date(bot, update, user_data):
         return ASK_DATE_STATE
     else:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Нету открытых дат для записи.")
+                         text="Нету открытых дат для записи.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
 
 def ask_time(bot, update, user_data):
     msg = update.message.text.strip()
     if msg == "Отмена":
-        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Отменил. Попробуй заново.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     match = date_regex.match(msg)
     if not match:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Плхоже, это была некорректная дата. Попробуй еще раз.")
+                         text="Плхоже, это была некорректная дата. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     date = match.group(1)
     # check for existing subscription for the date, 2 subs are not allowed per user per date
@@ -399,7 +428,8 @@ def ask_time(bot, update, user_data):
     if len(subs) > 0:
         bot.send_message(chat_id=update.message.chat_id,
                          text="У тебя уже есть запись на {}. "
-                              "Чтобы записаться отмени ранее сделанную запись.".format(date))
+                              "Чтобы записаться отмени ранее сделанную запись.".format(date),
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     user_data['date'] = date
     place = user_data['place']
@@ -417,12 +447,15 @@ def ask_time(bot, update, user_data):
 def store_sign_up(bot, update, user_data):
     msg = update.message.text.strip()
     if msg == "Отмена":
-        bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Отменил. Попробуй заново.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     match = time_regex.match(msg)
     if not match:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Плхоже, это было некорректное время. Попробуй еще раз.")
+                         text="Плхоже, это было некорректное время. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     date = user_data['date']
     place = user_data['place']
@@ -442,7 +475,8 @@ def store_sign_up(bot, update, user_data):
             # set class open = False
             db.execute_insert(db.set_class_state, (CLOSED, class_id))
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Ok, записал на {} {} {}".format(place, date, time))
+                         text="Ok, записал на {} {} {}".format(place, date, time),
+                         reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 
@@ -459,7 +493,8 @@ def ask_unsubscribe(bot, update):
         return RETURN_UNSUBSCRIBE_STATE
     else:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Нечего отменять, у тебя нет записи на ближайшие занятия.")
+                         text="Нечего отменять, у тебя нет записи на ближайшие занятия.",
+                         reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
 
@@ -467,7 +502,9 @@ def unsubscribe(bot, update):
     try:
         msg = update.message.text.strip()
         if msg == "Отмена":
-            bot.send_message(chat_id=update.message.chat_id, text="Отменил. Попробуй заново.")
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Отменил. Попробуй заново.",
+                             reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
         place, date, time = msg.split(" ")
         user_id = update.effective_user.id
@@ -478,10 +515,12 @@ def unsubscribe(bot, update):
             # set class open = True
             db.execute_insert(db.set_class_state, (OPEN, class_id))
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Ok, удалил запись на {} {} {}".format(place, date, time))
+                         text="Ok, удалил запись на {} {} {}".format(place, date, time),
+                         reply_markup=ReplyKeyboardRemove())
     except (ValueError, DBError):
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Что-то пошло не так. Попробуй еще раз.")
+                         text="Что-то пошло не так. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 
@@ -518,7 +557,8 @@ def end_conversation(bot, update):
     user = update.message.from_user
     logger.debug("User %s canceled the conversation.", user.first_name)
     bot.send_message(chat_id=update.message.chat_id,
-                     text='Ок. На том и порешим пока.')
+                     text='Ок. На том и порешим пока.',
+                     reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 
