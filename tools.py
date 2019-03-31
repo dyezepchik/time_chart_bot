@@ -37,8 +37,8 @@ class ReplyKeyboardWithCancel(ReplyKeyboardMarkup):
         keyboard.append([InlineKeyboardButton("Отмена", callback_data="/cancel")])
         super(ReplyKeyboardWithCancel, self).__init__(
             keyboard,
-            resize_keyboard,
-            one_time_keyboard,
-            selective,
+            resize_keyboard=resize_keyboard,
+            one_time_keyboard=one_time_keyboard,
+            selective=selective,
             **kwargs
         )

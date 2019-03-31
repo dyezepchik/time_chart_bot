@@ -27,7 +27,7 @@ import json
 import re
 
 from collections import defaultdict
-from itertools import product
+from itertools import product, zip_longest
 
 import apiai
 import xlsxwriter
@@ -177,8 +177,20 @@ def schedule(bot, update):
         place = key[1]
         worksheet.merge_range(row, 1, row, 4, '{} {} {}'.format(day, date, place), merge_format)
         row += 1
-        for line in sorted(records, key=lambda x: x[2]):  # sort by time
-            col = 0
+        # write time slots
+        col = 1
+        for time in CLASSES_HOURS:
+            worksheet.write(row, col, time)
+            col += 1
+        row += 1
+        students_lists = defaultdict(list)
+        for line in sorted(records, key=lambda x: x[5]):  # sort by last name
+            students_lists[line[2]].append(line[5])
+        lines = []
+        for time in CLASSES_HOURS:
+            lines.append(students_lists[time])
+        for line in zip_longest(*lines, fillvalue=""):
+            col = 1
             for val in line:
                 worksheet.write(row, col, val)
                 col += 1
