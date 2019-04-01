@@ -380,7 +380,7 @@ def ask_place(bot, update):
     # check for number of subscriptions for the user, not more than 2
     user_id = update.effective_user.id
     subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
-    if len(subs) > 1:
+    if user_id not in LIST_OF_ADMINS and len(subs) > 1:
         bot.send_message(chat_id=update.message.chat_id,
                          text="У тебя уже есть две записи. Сначала отмени другую запись.",
                          reply_markup=ReplyKeyboardRemove())
