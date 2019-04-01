@@ -437,7 +437,7 @@ def ask_time(bot, update, user_data):
     # check for existing subscription for the date, 2 subs are not allowed per user per date
     user_id = update.effective_user.id
     subs = db.execute_select(db.get_user_subscriptions_for_date_sql, (user_id, date))
-    if len(subs) > 0:
+    if user_id not in LIST_OF_ADMINS and len(subs) > 0:
         bot.send_message(chat_id=update.message.chat_id,
                          text="У тебя уже есть запись на {}. "
                               "Чтобы записаться отмени ранее сделанную запись.".format(date),
