@@ -519,6 +519,12 @@ def unsubscribe(bot, update):
                              reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
         place, date, time = msg.split(" ")
+        class_date = dt.datetime.strptime(date, DATE_FORMAT).date()
+        if class_date <= dt.date.today():
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Нельзя отменять запись в день занятия.",
+                             reply_markup=ReplyKeyboardRemove())
+            return ConversationHandler.END
         user_id = update.effective_user.id
         class_id = db.execute_select(db.get_class_id_sql, (date, time, place))[0][0]
         db.execute_insert(db.delete_user_subscription_sql, (user_id, class_id))
