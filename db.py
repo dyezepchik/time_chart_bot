@@ -106,7 +106,7 @@ SELECT cl.place, cl.date, cl.time, us.first_name, us.last_name, us.nick_name, us
 FROM classes cl
 JOIN schedule sch ON cl.id=sch.class_id
 JOIN users us ON us.id=sch.user_id
-WHERE cl.date>%s
+WHERE cl.date>=%s
 ORDER BY cl.place, cl.date, cl.time;
 """
 
