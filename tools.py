@@ -4,9 +4,7 @@ from functools import wraps
 
 from telegram import ReplyKeyboardMarkup, InlineKeyboardButton
 
-LIST_OF_ADMINS = list(map(int, os.environ['ADMIN_IDS'].split(',')))
-
-WEEKDAYS = ("Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье")
+from config import LIST_OF_ADMINS
 
 
 logging.basicConfig(filename='time_chart_bot.log',

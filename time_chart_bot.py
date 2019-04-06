@@ -54,7 +54,8 @@ from config import (
     LIST_OF_ADMINS,
     PEOPLE_PER_TIME_SLOT,
     PLACES,
-    WEEKDAYS
+    WEEKDAYS,
+    WEEKDAYS_SHORT,
 )
 from tools import logger, ReplyKeyboardWithCancel
 
@@ -425,8 +426,7 @@ def ask_date(bot, update, user_data):
     user_data['place'] = place
     open_dates = db.execute_select(db.get_open_classes_dates_sql, (dt.date.today().isoformat(), place))
     if open_dates:
-        # show count of open time slots per day in the given place
-        keyboard = [[InlineKeyboardButton("{} (свободно слотов {})".format(date, count), callback_data=str(date))]
+        keyboard = [[InlineKeyboardButton("{} {} (свободно слотов {})".format(WEEKDAYS_SHORT[date.weekday()], date, count), callback_data=str(date))]
                     for date, count in open_dates]
         reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
         bot.send_message(chat_id=update.message.chat_id,
@@ -467,7 +467,7 @@ def ask_time(bot, update, user_data):
     place = user_data['place']
     time_slots = db.execute_select(db.get_open_classes_time_sql, (date, place))
     time_slots = map(lambda x: x[0], time_slots)
-    # TODO: show count of open time slots
+    # TODO: show count of open positions per time
     keyboard = [[InlineKeyboardButton(str(time), callback_data=str(time))] for time in time_slots]
     reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
     bot.send_message(chat_id=update.message.chat_id,
