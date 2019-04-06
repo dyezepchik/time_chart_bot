@@ -1,14 +1,16 @@
 import os
 
 
-DATABASE_URL = os.environ['DATABASE_URL']
-
 # bot config
 BOT_TOKEN = os.environ['BOT_TOKEN']
 
+CLASSES_HOURS = ["12:00", "14:00", "16:00", "18:00"]
+
+DATABASE_URL = os.environ['DATABASE_URL']
+
 DATE_FORMAT = "%Y-%m-%d"
 
-CLASSES_HOURS = ["12:00", "14:00", "16:00", "18:00"]
+LIST_OF_ADMINS = list(map(int, os.environ['ADMIN_IDS'].split(',')))
 
 PEOPLE_PER_TIME_SLOT = 8
 
@@ -16,3 +18,5 @@ PLACES = [
     "МГАК",
     "Мотокафе",
 ]
+
+WEEKDAYS = ("Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье")

@@ -35,6 +35,23 @@ CREATE TABLE IF NOT EXISTS schedule (
 );
 """
 
+create_settings_table = """
+CREATE TABLE IF NOT EXISTS settings (
+ param text NOT NULL UNIQUE,
+ value text NOT NULL
+);
+"""
+
+set_initial_settings = """
+INSERT INTO settings value = %s
+WHERE param = $s;
+"""
+
+set_settings_param_value = """
+UPDATE settings SET (param, vale)
+VALUES ("allow", "yes");
+"""
+
 add_classes_dates_sql = """
 INSERT INTO classes (place, date, time, open)
 VALUES (%s,%s,%s,%s);
@@ -209,7 +226,9 @@ def migrate(conn):
     sqls = [
         create_users_table,
         create_classes_table,
-        create_schedule_table
+        create_schedule_table,
+        create_settings_table,
+        set_initial_settings,
     ]
     c = conn.cursor()
     for sql in sqls:

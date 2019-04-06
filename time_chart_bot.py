@@ -1,18 +1,18 @@
 """Time chart bot documentation
 
 Commands:
- - /start
+   /start
     On start bot checks if user exists in database already and adds him if not.
     After this asks user to introduce himself.
- - /add 2018-04-29 [2018-05-04]
+   /add 2018-04-29 [2018-05-04]
     Adds a new schedule for an ongoing period between start and end dates
     Args: date ot dates range
- - /schedule
+   /schedule
     Gives the full schedule of your upcoming classes
- - /remove 2018-04-29 [2018-05-03] [12:00]
+   /remove 2018-04-29 [2018-05-03] [12:00]
     Removes all schedule and upcoming classes for the given date(s)
     Args: date or dates range
- - /cancel
+   /cancel
     Cancels current conversation with bot.
 
 Conversation:
@@ -46,8 +46,17 @@ from telegram.ext import (
 
 import db
 
-from config import DATE_FORMAT, CLASSES_HOURS, DATABASE_URL, BOT_TOKEN, PEOPLE_PER_TIME_SLOT, PLACES
-from tools import LIST_OF_ADMINS, logger, ReplyKeyboardWithCancel, WEEKDAYS
+from config import (
+    DATE_FORMAT,
+    CLASSES_HOURS,
+    DATABASE_URL,
+    BOT_TOKEN,
+    LIST_OF_ADMINS,
+    PEOPLE_PER_TIME_SLOT,
+    PLACES,
+    WEEKDAYS
+)
+from tools import logger, ReplyKeyboardWithCancel
 
 
 conn = db.create_connection(DATABASE_URL)
@@ -269,13 +278,15 @@ def remove_schedule_continue(bot, update, user_data):
 
 
 def remove(bot, update, args, user_data):
-    """Set dates of classes to remove"""
-    # init vars
+    """Handler for 'remove' schedule command
+
+    Handles dates of classes to remove
+    """
     start, end, time = None, None, None
     user_id = update.effective_user.id
     if user_id not in LIST_OF_ADMINS:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Только администратор удалять расписание!",
+                         text="Только администратор может удалять расписание!",
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     if len(args) == 3:  # start_date end_date time_slot
@@ -362,8 +373,11 @@ def error(bot, update, error):
     logger.warning('Update "%s" caused error "%s"', update, error)
 
 
-# messages
 def text_msg(bot, update):
+    """Handler for all other text messages
+
+    Are passed to DialogFlow AI
+    """
     request = apiai.ApiAI('e0f0ee1fd08b4160bdb26c69df632678').text_request()
     request.lang = 'ru'
     request.session_id = 'MotoChatAIBot'
@@ -377,7 +391,13 @@ def text_msg(bot, update):
 
 
 def ask_place(bot, update):
-    # check for number of subscriptions for the user, not more than 2
+    """Entry point for 'subscribe' user conversation"""
+    subscription_allowed = db.execute_select(db.get_settings_param_value, ("allow",))[0][0]
+    if subscription_allowed == 'no':
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Сейчас запись на занятия закрыта.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
     user_id = update.effective_user.id
     subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
     if user_id not in LIST_OF_ADMINS and len(subs) > 1:
@@ -493,6 +513,13 @@ def store_sign_up(bot, update, user_data):
 
 
 def ask_unsubscribe(bot, update):
+    """Entry point for 'unsubscribe' user converstation"""
+    subscription_allowed = db.execute_select(db.get_settings_param_value, ("allow",))[0][0]
+    if subscription_allowed == 'no':
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Сейчас редактирование записи на занятия закрыто.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
     user_id = update.effective_user.id
     user_subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
     if user_subs:
@@ -511,6 +538,11 @@ def ask_unsubscribe(bot, update):
 
 
 def unsubscribe(bot, update):
+    """Handler for 'unsubcribe' command
+
+    The command allows user to unsubscribe himself from a specific
+    class. Removes him from schedule.
+    """
     try:
         msg = update.message.text.strip()
         if msg == "Отмена":
@@ -580,6 +612,38 @@ def end_conversation(bot, update):
     return ConversationHandler.END
 
 
+def allow(bot, update):
+    """Handler for 'allow' command.
+
+    Allows users to subscribe for opened classes
+    """
+    user_id = update.effective_user.id
+    if user_id not in LIST_OF_ADMINS:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Только администратор может разрешать запись на занятия!",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+    db.execute_insert(db.set_settings_param_value, ("yes", "allow"))
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Запись для курсантов открыта.")
+
+
+def disallow(bot, update):
+    """Handler for 'disallow' command.
+
+    Disallows users to subscribe for opened classes.
+    """
+    user_id = update.effective_user.id
+    if user_id not in LIST_OF_ADMINS:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Только администратор может закрывать запись на занятия!",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+    db.execute_insert(db.set_settings_param_value, ("no", "allow"))
+    bot.send_message(chat_id=update.message.chat_id,
+                     text="Запись для курсантов закрыта.")
+
+
 def run_bot():
     pp = PicklePersistence(filename='conversationbot')
     updater = Updater(token=BOT_TOKEN, persistence=pp)
@@ -588,6 +652,8 @@ def run_bot():
     add_classes_handler = CommandHandler('add', add, pass_args=True)
     show_schedule_handler = CommandHandler('schedule', schedule)
     cancel_handler = CommandHandler('cancel', end_conversation)
+    allow_handler = CommandHandler('allow', allow)
+    disallow_handler = CommandHandler('disallow', disallow)
     remove_schedule_handler = ConversationHandler(
         entry_points=[CommandHandler('remove', remove, pass_args=True, pass_user_data=True)],
         states={
@@ -615,6 +681,8 @@ def run_bot():
     dispatcher.add_handler(add_classes_handler)
     dispatcher.add_handler(show_schedule_handler)
     dispatcher.add_handler(cancel_handler)
+    dispatcher.add_handler(allow_handler)
+    dispatcher.add_handler(disallow_handler)
     dispatcher.add_handler(remove_schedule_handler)
     dispatcher.add_handler(unknown_handler)
 
