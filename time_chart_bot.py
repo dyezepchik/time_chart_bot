@@ -400,10 +400,12 @@ def ask_place(bot, update):
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     user_id = update.effective_user.id
-    subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
+    today = dt.date.today()
+    start_of_the_week = today - dt.timedelta(days=today.weekday())
+    subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, start_of_the_week.isoformat()))
     if user_id not in LIST_OF_ADMINS and len(subs) > 1:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="У тебя уже есть две записи. Сначала отмени другую запись.",
+                         text="У тебя уже есть две записи на эту неделю. Сначала отмени другую запись.",
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     keyboard = [[InlineKeyboardButton(place, callback_data=place)] for place in PLACES]
