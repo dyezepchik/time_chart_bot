@@ -43,13 +43,18 @@ CREATE TABLE IF NOT EXISTS settings (
 """
 
 set_initial_settings = """
-INSERT INTO settings value = %s
-WHERE param = $s;
+INSERT INTO settings (param, value)
+VALUES ('allow', 'yes');
 """
 
 set_settings_param_value = """
-UPDATE settings SET (param, vale)
-VALUES ("allow", "yes");
+UPDATE settings SET value = %s
+WHERE param = %s;
+"""
+
+get_settings_param_value = """
+SELECT value from settings
+WHERE param = %s;
 """
 
 add_classes_dates_sql = """
