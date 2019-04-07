@@ -1,8 +1,7 @@
 import logging
-import os
 from functools import wraps
 
-from telegram import ReplyKeyboardMarkup, InlineKeyboardButton
+from telegram import ReplyKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
 
 from config import LIST_OF_ADMINS
 
@@ -13,15 +12,18 @@ logging.basicConfig(filename='time_chart_bot.log',
 logger = logging.getLogger(__name__)
 
 
-def restricted(func):
-    @wraps(func)
-    def wrapped(bot, update, *args, **kwargs):
-        user_id = update.effective_user.id
-        if user_id not in LIST_OF_ADMINS:
-            print("Unauthorized access denied for {}.".format(user_id))
-            return
-        return func(bot, update, *args, **kwargs)
-    return wrapped
+def restricted(msg="Ага, счас! Только администратору можно!", returns=None):
+    def restricted_deco(func):
+        @wraps(func)
+        def wrapper(bot, update, *args, **kwargs):
+            user_id = update.effective_user.id
+            if user_id not in LIST_OF_ADMINS:
+                bot.send_message(chat_id=update.message.chat_id,
+                                 text=msg,
+                                 reply_markup=ReplyKeyboardRemove())
+                return returns
+            return func(bot, update, *args, **kwargs)
+        return wrapper
 
 
 class ReplyKeyboardWithCancel(ReplyKeyboardMarkup):

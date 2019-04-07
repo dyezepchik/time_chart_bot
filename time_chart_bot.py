@@ -57,7 +57,7 @@ from config import (
     WEEKDAYS,
     WEEKDAYS_SHORT,
 )
-from tools import logger, ReplyKeyboardWithCancel
+from tools import logger, ReplyKeyboardWithCancel, restricted
 
 
 conn = db.create_connection(DATABASE_URL)
@@ -110,13 +110,9 @@ def check_dates(start, end):
     return None, None
 
 
+@restricted
 def add(bot, update, args):
     start, end = None, None
-    user_id = update.effective_user.id
-    if user_id not in LIST_OF_ADMINS:
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="Ага, счас! Только администратору можно!")
-        return
     if len(args) == 2:
         try:
             start = dt.datetime.strptime(args[0], DATE_FORMAT).date()
@@ -148,12 +144,8 @@ def add(bot, update, args):
                                                           "Все верно?".format(start, end))
 
 
+@restricted(msg="Расписание покажу только администратору!")
 def schedule(bot, update):
-    user_id = update.effective_user.id
-    if user_id not in LIST_OF_ADMINS:
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="Расписание покажу только администратору!")
-        return
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
     user_ids = list(set(map(lambda x: x[6], schedule)))
     user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
@@ -167,10 +159,6 @@ def schedule(bot, update):
     for line in lines:
         # group by date+place
         records_by_date_place[(line[1], line[0])].append(line)
-    # text = ""
-    # for _, lines in records_by_place.items():
-    #     text += "\n".join(lines) + "\n\n"
-    # bot.send_message(chat_id=update.message.chat_id, text=text)
     workbook = xlsxwriter.Workbook('/tmp/schedule.xlsx')
     merge_format = workbook.add_format({
         'align': 'center',
@@ -278,18 +266,13 @@ def remove_schedule_continue(bot, update, user_data):
     return ConversationHandler.END
 
 
+@restricted(msg="Только администратор может удалять расписание!", returns=ConversationHandler.END)
 def remove(bot, update, args, user_data):
     """Handler for 'remove' schedule command
 
     Handles dates of classes to remove
     """
     start, end, time = None, None, None
-    user_id = update.effective_user.id
-    if user_id not in LIST_OF_ADMINS:
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="Только администратор может удалять расписание!",
-                         reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
     if len(args) == 3:  # start_date end_date time_slot
         try:
             start = dt.datetime.strptime(args[0], DATE_FORMAT).date()
@@ -614,33 +597,23 @@ def end_conversation(bot, update):
     return ConversationHandler.END
 
 
+@restricted(msg="Только администратор может разрешать запись на занятия!")
 def allow(bot, update):
     """Handler for 'allow' command.
 
     Allows users to subscribe for opened classes
     """
-    user_id = update.effective_user.id
-    if user_id not in LIST_OF_ADMINS:
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="Только администратор может разрешать запись на занятия!",
-                         reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
     db.execute_insert(db.set_settings_param_value, ("yes", "allow"))
     bot.send_message(chat_id=update.message.chat_id,
                      text="Запись для курсантов открыта.")
 
 
+@restricted(msg="Только администратор может закрывать запись на занятия!")
 def disallow(bot, update):
     """Handler for 'disallow' command.
 
     Disallows users to subscribe for opened classes.
     """
-    user_id = update.effective_user.id
-    if user_id not in LIST_OF_ADMINS:
-        bot.send_message(chat_id=update.message.chat_id,
-                         text="Только администратор может закрывать запись на занятия!",
-                         reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
     db.execute_insert(db.set_settings_param_value, ("no", "allow"))
     bot.send_message(chat_id=update.message.chat_id,
                      text="Запись для курсантов закрыта.")
