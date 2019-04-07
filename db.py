@@ -96,7 +96,7 @@ WHERE
 
 get_open_classes_dates_sql = """
 SELECT date, count(*) from classes 
-WHERE date > %s
+WHERE date >= %s
     AND open is true
     AND place = %s
 GROUP BY date

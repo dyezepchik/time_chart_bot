@@ -25,6 +25,8 @@ def restricted(msg="Ага, счас! Только администратору 
             return func(bot, update, *args, **kwargs)
         return wrapper
 
+    return restricted_deco
+
 
 class ReplyKeyboardWithCancel(ReplyKeyboardMarkup):
 

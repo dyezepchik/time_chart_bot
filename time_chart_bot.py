@@ -76,7 +76,7 @@ CLOSED, OPEN = False, True
 
 # regex
 place_regex = re.compile("^({})$".format("|".join(PLACES)), flags=re.IGNORECASE)
-date_regex = re.compile("^([0-9]{4}-[0-9]{2}-[0-9]{2}).*")
+date_regex = re.compile(".*([0-9]{4}-[0-9]{2}-[0-9]{2}).*")
 time_regex = re.compile("^(" + "|".join(CLASSES_HOURS) + ")$")
 
 
@@ -110,7 +110,7 @@ def check_dates(start, end):
     return None, None
 
 
-@restricted
+@restricted()
 def add(bot, update, args):
     start, end = None, None
     if len(args) == 2:
@@ -400,6 +400,11 @@ def ask_place(bot, update):
 
 
 def ask_date(bot, update, user_data):
+    """Asks date to subscribe to
+
+    Dates are offered starting from 'tomorrow'. Users are not allowed to edit their subscriptions
+    for 'today' and earlier.
+    """
     msg = update.message.text.strip()
     if msg == "Отмена":
         bot.send_message(chat_id=update.message.chat_id,
@@ -409,10 +414,15 @@ def ask_date(bot, update, user_data):
     match = place_regex.match(msg)
     place = match.group(1)
     user_data['place'] = place
-    open_dates = db.execute_select(db.get_open_classes_dates_sql, (dt.date.today().isoformat(), place))
+    open_dates = db.execute_select(db.get_open_classes_dates_sql,
+                                   ((dt.date.today() + dt.timedelta(days=1)).isoformat(), place))
     if open_dates:
-        keyboard = [[InlineKeyboardButton("{} {} (свободно слотов {})".format(WEEKDAYS_SHORT[date.weekday()], date, count), callback_data=str(date))]
-                    for date, count in open_dates]
+        keyboard = [[
+            InlineKeyboardButton(
+                "{} {} (свободно слотов {})".format(WEEKDAYS_SHORT[date.weekday()], date, count),
+                callback_data=str(date)
+            )
+        ] for date, count in open_dates]
         reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
         bot.send_message(chat_id=update.message.chat_id,
                          text="На когда?",
@@ -426,6 +436,11 @@ def ask_date(bot, update, user_data):
 
 
 def ask_time(bot, update, user_data):
+    """Asks time to subscribe to
+
+    Checks that the date given is not earlier than 'tomorrow'. Users are not allowed to edit their subscriptions
+    for 'today' and earlier.
+    """
     msg = update.message.text.strip()
     if msg == "Отмена":
         bot.send_message(chat_id=update.message.chat_id,
@@ -434,11 +449,27 @@ def ask_time(bot, update, user_data):
         return ConversationHandler.END
     match = date_regex.match(msg)
     if not match:
+        # checks that the given message contains something similar to date
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Плхоже, это была некорректная дата. Попробуй еще раз.",
+                         text="Похоже, это была некорректная дата. Попробуй еще раз.",
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     date = match.group(1)
+    try:
+        # checks the actual date correctness
+        date = dt.datetime.strptime(date, DATE_FORMAT).date()
+    except ValueError:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Похоже, это была некорректная дата. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+    if date <= dt.date.today():
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Нельзя редактировать уже зафиксированные даты (сегодня и ранее)."
+                              "Можно записываться на 'завтра' и позже.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+    date = date.isoformat()
     # check for existing subscription for the date, 2 subs are not allowed per user per date
     user_id = update.effective_user.id
     subs = db.execute_select(db.get_user_subscriptions_for_date_sql, (user_id, date))
@@ -498,7 +529,10 @@ def store_sign_up(bot, update, user_data):
 
 
 def ask_unsubscribe(bot, update):
-    """Entry point for 'unsubscribe' user converstation"""
+    """Entry point for 'unsubscribe' user conversation
+
+    Offer only subscriptions starting from 'tomorrow' for cancel.
+    """
     subscription_allowed = db.execute_select(db.get_settings_param_value, ("allow",))[0][0]
     if subscription_allowed == 'no':
         bot.send_message(chat_id=update.message.chat_id,
@@ -506,7 +540,8 @@ def ask_unsubscribe(bot, update):
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
     user_id = update.effective_user.id
-    user_subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, dt.date.today().isoformat()))
+    user_subs = db.execute_select(db.get_user_subscriptions_sql,
+                                  (user_id, (dt.date.today() + dt.timedelta(days=1)).isoformat()))
     if user_subs:
         keyboard = [[InlineKeyboardButton("{} {} {}".format(place, date, time), callback_data=(str(date), time))]
                     for place, date, time in user_subs]
@@ -523,10 +558,11 @@ def ask_unsubscribe(bot, update):
 
 
 def unsubscribe(bot, update):
-    """Handler for 'unsubcribe' command
+    """Handler for 'unsubscribe' command
 
-    The command allows user to unsubscribe himself from a specific
-    class. Removes him from schedule.
+    The command allows user to unsubscribe himself from a specificclass.
+    Removes him from schedule. Check that the date given is not 'today'
+    or earlier.
     """
     try:
         msg = update.message.text.strip()
@@ -536,7 +572,13 @@ def unsubscribe(bot, update):
                              reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
         place, date, time = msg.split(" ")
-        class_date = dt.datetime.strptime(date, DATE_FORMAT).date()
+        try:
+            class_date = dt.datetime.strptime(date, DATE_FORMAT).date()
+        except ValueError:
+            bot.send_message(chat_id=update.message.chat_id,
+                             text="Похоже, это была некорректная дата. Попробуй еще раз.",
+                             reply_markup=ReplyKeyboardRemove())
+            return ConversationHandler.END
         if class_date <= dt.date.today():
             bot.send_message(chat_id=update.message.chat_id,
                              text="Нельзя отменять запись в день занятия.",
