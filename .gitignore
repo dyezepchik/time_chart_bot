@@ -5,3 +5,5 @@ venv*
 bot_details.txt
 python-telegram-bot
 conversationbot
+*.log
+tmp/

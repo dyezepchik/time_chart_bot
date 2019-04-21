@@ -67,7 +67,7 @@ ASK_PLACE_STATE,\
     ASK_DATE_STATE,\
     ASK_TIME_STATE,\
     RETURN_UNSUBSCRIBE_STATE,\
-    ASK_FIRST_NAME_STATE, \
+    ASK_GROUP_NUM_STATE, \
     ASK_LAST_NAME_STATE, \
     REMOVE_SCHEDULE_STATE = range(7)
 
@@ -93,8 +93,8 @@ def start_cmd(bot, update):
                           "И я предложу выбрать из тех дат, которые остались свободными. "
                           "Удалить запись можно написав мне \"Отпиши меня\" или \"Отмени запись\. "
                           "А сейчас представься пожалуйста, чтобы я знал, кого я записываю на занятия. "
-                          "Напиши свое имя.")
-    return ASK_FIRST_NAME_STATE
+                          "Напиши номер своей группы.")
+    return ASK_GROUP_NUM_STATE
 
 
 def check_dates(start, end):
@@ -147,12 +147,12 @@ def add(bot, update, args):
 @restricted(msg="Расписание покажу только администратору!")
 def schedule(bot, update):
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
-    user_ids = list(set(map(lambda x: x[6], schedule)))
+    user_ids = list(set(map(lambda x: x[5], schedule)))
     user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
     user_count = dict(user_count)
     lines = [(line[0], str(line[1]), line[2],  # place, date, time
-                       str(line[3]), "({})".format(line[5]), str(line[4]),  # Name (Nickname) Last Name
-                       str(user_count.get(line[6], 0)))  # visit count
+                       str(line[3]), line[4],  # GroupNum LastName
+                       str(user_count.get(line[5], 0)))  # visit count
              for line in schedule]
     # partition by places
     records_by_date_place = defaultdict(list)
@@ -182,8 +182,8 @@ def schedule(bot, update):
             col += 1
         row += 1
         students_lists = defaultdict(list)
-        for line in sorted(records, key=lambda x: x[5]):  # sort by last name
-            students_lists[line[2]].append(line[5])
+        for line in sorted(records, key=lambda x: x[4]):  # sort by last name
+            students_lists[line[2]].append("{} {}".format(line[3], line[4]))
         lines = []
         for time in CLASSES_HOURS:
             lines.append(students_lists[time])
@@ -601,14 +601,15 @@ def unsubscribe(bot, update):
     return ConversationHandler.END
 
 
-def store_first_name(bot, update):
+def store_group_num(bot, update):
     user_id = update.effective_user.id
-    name = update.message.text.strip().split()[0]
-    if not name:
+    msg = update.message.text.strip().split()[0]
+    group_num = re.match("\d+", msg)[0]
+    if not group_num:
         bot.send_message(chat_id=update.message.chat_id,
-                         text="Я немного не понял. Просто напиши свое имя.")
-        return ASK_FIRST_NAME_STATE
-    db.execute_insert(db.update_user_first_name_sql, (name, user_id))
+                         text="Я немного не понял. Просто напиши номер своей группы.")
+        return ASK_GROUP_NUM_STATE
+    db.execute_insert(db.update_user_group_sql, (int(group_num), user_id))
     bot.send_message(chat_id=update.message.chat_id,
                      text="Теперь напиши пожалуйста фамилию.")
     return ASK_LAST_NAME_STATE
@@ -631,8 +632,8 @@ def store_last_name(bot, update):
 
 
 def end_conversation(bot, update):
-    user = update.message.from_user
-    logger.debug("User %s canceled the conversation.", user.first_name)
+    user_id = update.effective_user.id
+    logger.debug("User %s canceled the conversation.", user_id)
     bot.send_message(chat_id=update.message.chat_id,
                      text='Ок. На том и порешим пока.',
                      reply_markup=ReplyKeyboardRemove())
@@ -686,7 +687,7 @@ def run_bot():
     identity_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_cmd)],
         states={
-            ASK_FIRST_NAME_STATE: [MessageHandler(Filters.text, store_first_name)],
+            ASK_GROUP_NUM_STATE: [MessageHandler(Filters.text, store_group_num)],
             ASK_LAST_NAME_STATE: [MessageHandler(Filters.text, store_last_name)],
         },
         fallbacks=[CommandHandler('cancel', end_conversation)],

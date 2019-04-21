@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
  id integer PRIMARY KEY,
  nick_name text NOT NULL,
  first_name text,
- last_name text
+ last_name text,
+ group_num integer
 );
 """
 
@@ -87,6 +88,13 @@ WHERE
     id = %s;
 """
 
+update_user_group_sql = """
+UPDATE users
+SET group_num = %s
+WHERE
+    id = %s;
+"""
+
 update_user_last_name_sql = """
 UPDATE users
 SET last_name = %s
@@ -124,7 +132,7 @@ SELECT id from classes WHERE date = %s AND time = %s AND place = ANY(%s);
 """
 
 get_full_schedule_sql = """
-SELECT cl.place, cl.date, cl.time, us.first_name, us.last_name, us.nick_name, us.id
+SELECT cl.place, cl.date, cl.time, us.group_num, us.last_name, us.id
 FROM classes cl
 JOIN schedule sch ON cl.id=sch.class_id
 JOIN users us ON us.id=sch.user_id
