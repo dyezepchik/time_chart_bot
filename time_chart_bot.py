@@ -670,8 +670,8 @@ def run_bot():
     add_classes_handler = CommandHandler('add', add, pass_args=True)
     show_schedule_handler = CommandHandler('schedule', schedule)
     cancel_handler = CommandHandler('cancel', end_conversation)
-    allow_handler = CommandHandler('allow', allow)
-    disallow_handler = CommandHandler('disallow', disallow)
+    allow_handler = CommandHandler('open', allow)
+    disallow_handler = CommandHandler('close', disallow)
     remove_schedule_handler = ConversationHandler(
         entry_points=[CommandHandler('remove', remove, pass_args=True, pass_user_data=True)],
         states={
