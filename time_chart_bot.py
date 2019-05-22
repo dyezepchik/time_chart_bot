@@ -24,6 +24,7 @@ Conversation:
 # TODO: Try pendulum https://github.com/sdispater/pendulum
 import datetime as dt
 import json
+import logging
 import re
 
 from collections import defaultdict
@@ -147,7 +148,7 @@ def add(bot, update, args):
 @restricted(msg="Расписание покажу только администратору!")
 def schedule(bot, update):
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
-    user_ids = list(set(map(lambda x: x[5], schedule)))
+    user_ids = list(set(map(lambda x: x[5] or 'unknown', schedule)))
     user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
     user_count = dict(user_count)
     lines = [(line[0], str(line[1]), line[2],  # place, date, time
@@ -160,41 +161,45 @@ def schedule(bot, update):
         # group by date+place
         records_by_date_place[(line[1], line[0])].append(line)
     workbook = xlsxwriter.Workbook('/tmp/schedule.xlsx')
-    merge_format = workbook.add_format({
-        'align': 'center',
-        'bold': True,
-    })
-    worksheet = workbook.add_worksheet()
-    row = 0
-    for key in sorted(records_by_date_place.keys()):
-        records = records_by_date_place[key]
-        row += 1
-        # merge cells and write 'day date place'
-        date = dt.datetime.strptime(key[0], DATE_FORMAT).date()
-        day = WEEKDAYS[date.weekday()]
-        place = key[1]
-        worksheet.merge_range(row, 1, row, 4, '{} {} {}'.format(day, date, place), merge_format)
-        row += 1
-        # write time slots
-        col = 1
-        for time in CLASSES_HOURS:
-            worksheet.write(row, col, time)
-            col += 1
-        row += 1
-        students_lists = defaultdict(list)
-        for line in sorted(records, key=lambda x: x[4]):  # sort by last name
-            students_lists[line[2]].append("{} {}".format(line[3], line[4]))
-        lines = []
-        for time in CLASSES_HOURS:
-            lines.append(students_lists[time])
-        for line in zip_longest(*lines, fillvalue=""):
+    try:
+        merge_format = workbook.add_format({
+            'align': 'center',
+            'bold': True,
+        })
+        worksheet = workbook.add_worksheet()
+        row = 0
+        for key in sorted(records_by_date_place.keys()):
+            records = records_by_date_place[key]
+            row += 1
+            # merge cells and write 'day date place'
+            date = dt.datetime.strptime(key[0], DATE_FORMAT).date()
+            day = WEEKDAYS[date.weekday()]
+            place = key[1]
+            worksheet.merge_range(row, 1, row, 4, '{} {} {}'.format(day, date, place), merge_format)
+            row += 1
+            # write time slots
             col = 1
-            for val in line:
-                worksheet.write(row, col, val)
+            for time in CLASSES_HOURS:
+                worksheet.write(row, col, time)
                 col += 1
             row += 1
-    workbook.close()
-    bot.send_document(chat_id=update.message.chat_id, document=open('/tmp/schedule.xlsx', 'rb'))
+            students_lists = defaultdict(list)
+            for line in sorted(records, key=lambda x: x[4]):  # sort by last name
+                students_lists[line[2]].append("{} {}".format(line[3], line[4]))
+            lines = []
+            for time in CLASSES_HOURS:
+                lines.append(students_lists[time])
+            for line in zip_longest(*lines, fillvalue=""):
+                col = 1
+                for val in line:
+                    worksheet.write(row, col, val)
+                    col += 1
+                row += 1
+    except Exception as e:
+        logging.error(e)
+    finally:
+        workbook.close()
+        bot.send_document(chat_id=update.message.chat_id, document=open('/tmp/schedule.xlsx', 'rb'))
 
 
 def remove_classes(date, time=None, place=None):
@@ -348,6 +353,9 @@ def remove(bot, update, args, user_data):
 
 
 def unknown(bot, update):
+    logging.info("User {} {} typed: {}".format(update.effective_user.id,
+                                               update.effective_user.username,
+                                               update.message.text))
     bot.send_message(chat_id=update.message.chat_id, text="Извини, не знаю такой команды.")
 
 
