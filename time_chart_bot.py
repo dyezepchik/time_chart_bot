@@ -62,6 +62,7 @@ from tools import logger, ReplyKeyboardWithCancel, restricted
 
 
 conn = db.create_connection(DATABASE_URL)
+logger = logging.basicConfig()
 
 # Conversation states
 ASK_PLACE_STATE,\
@@ -196,7 +197,7 @@ def schedule(bot, update):
                     col += 1
                 row += 1
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
     finally:
         workbook.close()
         bot.send_document(chat_id=update.message.chat_id, document=open('/tmp/schedule.xlsx', 'rb'))
@@ -353,7 +354,7 @@ def remove(bot, update, args, user_data):
 
 
 def unknown(bot, update):
-    logging.info("User {} {} typed: {}".format(update.effective_user.id,
+    logger.info("User {} {} typed: {}".format(update.effective_user.id,
                                                update.effective_user.username,
                                                update.message.text))
     bot.send_message(chat_id=update.message.chat_id, text="Извини, не знаю такой команды.")
