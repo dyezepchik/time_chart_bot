@@ -24,7 +24,6 @@ Conversation:
 # TODO: Try pendulum https://github.com/sdispater/pendulum
 import datetime as dt
 import json
-import logging
 import re
 
 from collections import defaultdict
@@ -62,7 +61,6 @@ from tools import logger, ReplyKeyboardWithCancel, restricted
 
 
 conn = db.create_connection(DATABASE_URL)
-logger = logging.basicConfig()
 
 # Conversation states
 ASK_PLACE_STATE,\
@@ -355,8 +353,8 @@ def remove(bot, update, args, user_data):
 
 def unknown(bot, update):
     logger.info("User {} {} typed: {}".format(update.effective_user.id,
-                                               update.effective_user.username,
-                                               update.message.text))
+                                              update.effective_user.username,
+                                              update.message.text))
     bot.send_message(chat_id=update.message.chat_id, text="Извини, не знаю такой команды.")
 
 

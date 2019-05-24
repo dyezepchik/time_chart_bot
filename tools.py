@@ -6,10 +6,8 @@ from telegram import ReplyKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRem
 from config import LIST_OF_ADMINS
 
 
-logging.basicConfig(filename='time_chart_bot.log',
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 def restricted(msg="Ага, счас! Только администратору можно!", returns=None):
