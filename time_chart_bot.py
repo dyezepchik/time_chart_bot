@@ -184,7 +184,7 @@ def schedule(bot, update):
             row += 1
             students_lists = defaultdict(list)
             for line in sorted(records, key=lambda x: x[4]):  # sort by last name
-                students_lists[line[2]].append("{} {}".format(line[3], line[4]))
+                students_lists[line[2]].append("{} {} ({})".format(line[3], line[4], line[5]))
             lines = []
             for time in CLASSES_HOURS:
                 lines.append(students_lists[time])
