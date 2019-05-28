@@ -323,13 +323,13 @@ def remove(bot, update, args, user_data):
                              reply_markup=ReplyKeyboardRemove())
     elif len(args) == 1:  # date
         try:
-            date = dt.datetime.strptime(args[0], DATE_FORMAT).date()
+            start = dt.datetime.strptime(args[0], DATE_FORMAT).date()
         except (ValueError, TypeError) as e:
             bot.send_message(chat_id=update.message.chat_id,
                              text="Ой, наверное дата в каком-то кривом формате. Попробуй еще раз так: 2019-05-01.",
                              reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
-        if date < dt.date.today():
+        if start < dt.date.today():
             bot.send_message(chat_id=update.message.chat_id,
                              text="Вы пытаетесь удалить расписание на дату, которая уже в прошлом.",
                              reply_markup=ReplyKeyboardRemove())
