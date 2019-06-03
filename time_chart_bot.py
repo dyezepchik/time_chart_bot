@@ -175,7 +175,10 @@ def add_schedule_continue(bot, update, args):
 
 
 @restricted(msg="Расписание покажу только администратору!")
-def schedule(bot, update):
+def schedule(bot, update, args):
+    if len(args) > 0 and args[0] != '++':
+        bot.send_message(chat_id=update.message.chat_id, text="Наверное аргумент неправильный.")
+        return
     schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
     user_ids = list(set(map(lambda x: x[5] or 'unknown', schedule)))
     user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
@@ -214,7 +217,8 @@ def schedule(bot, update):
             row += 1
             students_lists = defaultdict(list)
             for line in sorted(records, key=lambda x: x[4]):  # sort by last name
-                students_lists[line[2]].append(f"{line[3]} {line[4]}")
+                string = f"{line[3]} {line[4]} ({line[5]})" if args else f"{line[3]} {line[4]}"
+                students_lists[line[2]].append(string)
             lines = []
             for time in CLASSES_HOURS:
                 lines.append(students_lists[time])
@@ -707,7 +711,7 @@ def run_bot():
     add_dialog_handler = CommandHandler('add', add, pass_user_data=True)
     add_classes_handler = CommandHandler('add_schedule', add_schedule_continue, pass_args=True)
     callback_handler = CallbackQueryHandler(inline_handler, pass_user_data=True)
-    show_schedule_handler = CommandHandler('schedule', schedule)
+    show_schedule_handler = CommandHandler('schedule', schedule, pass_args=True)
     cancel_handler = CommandHandler('cancel', end_conversation)
     allow_handler = CommandHandler('open', allow)
     disallow_handler = CommandHandler('close', disallow)
