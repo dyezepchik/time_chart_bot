@@ -4,7 +4,7 @@ import os
 # bot config
 BOT_TOKEN = os.environ['BOT_TOKEN']
 
-CLASSES_HOURS = ["12:00", "14:00", "16:00", "18:00"]
+CLASSES_HOURS = ["12:00", "14:00", "16:00", "18:00", "20:00"]
 
 DATABASE_URL = os.environ['DATABASE_URL']
 
