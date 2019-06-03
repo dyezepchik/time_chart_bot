@@ -80,7 +80,9 @@ def process_calendar_selection(bot, update):
     (action, year, month, day) = separate_callback_data(query.data)
     curr = datetime.datetime(int(year), int(month), 1)
     if action == "IGNORE":
-        bot.answer_callback_query(callback_query_id=query.id)
+        bot.edit_message_text(text="Отменил",
+                              chat_id=query.message.chat_id,
+                              message_id=query.message.message_id)
     elif action == "DAY":
         bot.edit_message_text(text=query.message.text,
                               chat_id=query.message.chat_id,
