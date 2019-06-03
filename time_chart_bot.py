@@ -35,6 +35,7 @@ import xlsxwriter
 from psycopg2 import Error as DBError
 from telegram import InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
+    CallbackQueryHandler,
     CommandHandler,
     ConversationHandler,
     PicklePersistence,
@@ -57,19 +58,20 @@ from config import (
     WEEKDAYS,
     WEEKDAYS_SHORT,
 )
+import telegramcalendar
 from tools import logger, ReplyKeyboardWithCancel, restricted
 
 
 conn = db.create_connection(DATABASE_URL)
 
 # Conversation states
-ASK_PLACE_STATE,\
-    ASK_DATE_STATE,\
-    ASK_TIME_STATE,\
-    RETURN_UNSUBSCRIBE_STATE,\
-    ASK_GROUP_NUM_STATE, \
-    ASK_LAST_NAME_STATE, \
-    REMOVE_SCHEDULE_STATE = range(7)
+(ASK_PLACE_STATE,
+ ASK_DATE_STATE,
+ ASK_TIME_STATE,
+ RETURN_UNSUBSCRIBE_STATE,
+ ASK_GROUP_NUM_STATE,
+ ASK_LAST_NAME_STATE,
+ REMOVE_SCHEDULE_STATE) = range(7)
 
 # classes states
 CLOSED, OPEN = False, True
@@ -111,7 +113,35 @@ def check_dates(start, end):
 
 
 @restricted()
-def add(bot, update, args):
+def add(bot, update, user_data):
+    """Handler for 'add' command, which adds schedule for new dates"""
+    try:
+        del(user_data['start'])
+        del(user_data['end'])
+    except KeyError:
+        pass
+    update.message.reply_text("Выбери первую дату: ",
+                              reply_markup=telegramcalendar.create_calendar())
+
+
+def inline_handler(bot, update, user_data):
+    selected, date = telegramcalendar.process_calendar_selection(bot, update)
+    if selected:
+        if not user_data.get('start'):
+            user_data['start'] = date.strftime("%Y-%m-%d")
+            update.effective_message.reply_text("Выбери вторую дату: ",
+                                                reply_markup=telegramcalendar.create_calendar())
+        else:
+            user_data['end'] = date.strftime("%Y-%m-%d")
+            date_range = "{} {}".format(user_data['start'], user_data['end'])
+            keyboard = [[InlineKeyboardButton(f'/add_schedule {date_range}')]]
+            reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
+            bot.send_message(chat_id=update.callback_query.from_user.id,
+                             text=f"Выбраны даты: {user_data['start']} - {user_data['end']}",
+                             reply_markup=reply_markup)
+
+
+def add_schedule_continue(bot, update, args):
     start, end = None, None
     if len(args) == 2:
         try:
@@ -174,7 +204,7 @@ def schedule(bot, update):
             date = dt.datetime.strptime(key[0], DATE_FORMAT).date()
             day = WEEKDAYS[date.weekday()]
             place = key[1]
-            worksheet.merge_range(row, 1, row, 4, '{} {} {}'.format(day, date, place), merge_format)
+            worksheet.merge_range(row, 1, row, 4, f"{day}, {date}, {place}", merge_format)
             row += 1
             # write time slots
             col = 1
@@ -184,7 +214,7 @@ def schedule(bot, update):
             row += 1
             students_lists = defaultdict(list)
             for line in sorted(records, key=lambda x: x[4]):  # sort by last name
-                students_lists[line[2]].append("{} {} ({})".format(line[3], line[4], line[5]))
+                students_lists[line[2]].append(f"{line[3]} {line[4]}")
             lines = []
             for time in CLASSES_HOURS:
                 lines.append(students_lists[time])
@@ -674,7 +704,9 @@ def run_bot():
     updater = Updater(token=BOT_TOKEN, persistence=pp)
     dispatcher = updater.dispatcher
 
-    add_classes_handler = CommandHandler('add', add, pass_args=True)
+    add_dialog_handler = CommandHandler('add', add, pass_user_data=True)
+    add_classes_handler = CommandHandler('add_schedule', add_schedule_continue, pass_args=True)
+    callback_handler = CallbackQueryHandler(inline_handler, pass_user_data=True)
     show_schedule_handler = CommandHandler('schedule', schedule)
     cancel_handler = CommandHandler('cancel', end_conversation)
     allow_handler = CommandHandler('open', allow)
@@ -703,7 +735,9 @@ def run_bot():
     )
 
     dispatcher.add_handler(identity_handler)
+    dispatcher.add_handler(add_dialog_handler)
     dispatcher.add_handler(add_classes_handler)
+    dispatcher.add_handler(callback_handler)
     dispatcher.add_handler(show_schedule_handler)
     dispatcher.add_handler(cancel_handler)
     dispatcher.add_handler(allow_handler)
