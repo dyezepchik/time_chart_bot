@@ -216,7 +216,7 @@ def schedule(bot, update, args):
                 col += 1
             row += 1
             students_lists = defaultdict(list)
-            for line in sorted(records, key=lambda x: x[4]):  # sort by last name
+            for line in sorted(records, key=lambda x: x[4] or ''):  # sort by last name
                 string = f"{line[3]} {line[4]} ({line[5]})" if args else f"{line[3]} {line[4]}"
                 students_lists[line[2]].append(string)
             lines = []
