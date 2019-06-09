@@ -8,6 +8,7 @@ from telegram import InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import ConversationHandler
 
 import db
+import student_lists
 import telegramcalendar
 from config import (
     CLASSES_HOURS,
@@ -40,7 +41,10 @@ def check_dates(start, end):
 
 @restricted()
 def add(bot, update, user_data):
-    """Handler for 'add' command, which adds schedule for new dates"""
+    """Handler for 'add' command, which adds schedule for new dates
+
+    Handler actually only creates calendar keyboard
+    """
     try:
         del(user_data['start'])
         del(user_data['end'])
@@ -51,19 +55,31 @@ def add(bot, update, user_data):
 
 
 def inline_handler(bot, update, user_data):
-    selected, date = telegramcalendar.process_calendar_selection(bot, update)
-    if selected:
-        if not user_data.get('start'):
-            user_data['start'] = date.strftime("%Y-%m-%d")
-            update.effective_message.reply_text("Выбери вторую дату: ",
-                                                reply_markup=telegramcalendar.create_calendar())
-        else:
-            user_data['end'] = date.strftime("%Y-%m-%d")
-            date_range = "{} {}".format(user_data['start'], user_data['end'])
-            keyboard = [[InlineKeyboardButton(f'/add_schedule {date_range}')]]
+    component = update.callback_query.data.split(";")[0]
+
+    if component == telegramcalendar.COMPONENT:
+        selected, date = telegramcalendar.process_calendar_selection(bot, update)
+        if selected:
+            if not user_data.get('start'):
+                user_data['start'] = date.strftime("%Y-%m-%d")
+                update.effective_message.reply_text("Выбери вторую дату: ",
+                                                    reply_markup=telegramcalendar.create_calendar())
+            else:
+                user_data['end'] = date.strftime("%Y-%m-%d")
+                date_range = "{} {}".format(user_data['start'], user_data['end'])
+                keyboard = [[InlineKeyboardButton(f'/add_schedule {date_range}')]]
+                reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
+                bot.send_message(chat_id=update.callback_query.from_user.id,
+                                 text=f"Выбраны даты: {user_data['start']} - {user_data['end']}",
+                                 reply_markup=reply_markup)
+    elif component == student_lists.COMPONENT:
+        selected, user_id = student_lists.process_user_selection(bot, update)
+        if selected:
+            user_data['student_id'] = user_id
+            keyboard = [[InlineKeyboardButton('Запиши меня')]]
             reply_markup = ReplyKeyboardWithCancel(keyboard, one_time_keyboard=True)
             bot.send_message(chat_id=update.callback_query.from_user.id,
-                             text=f"Выбраны даты: {user_data['start']} - {user_data['end']}",
+                             text=f"Добавляем студента: {user_id}",
                              reply_markup=reply_markup)
 
 
@@ -292,7 +308,7 @@ def schedule(bot, update, args):
                 col += 1
             row += 1
             students_lists = defaultdict(list)
-            for line in sorted(records, key=lambda x: x[4]):  # sort by last name
+            for line in sorted(records, key=lambda x: x[4] or ''):  # sort by last name
                 string = f"{line[3]} {line[4]} ({line[5]})" if args else f"{line[3]} {line[4]}"
                 students_lists[line[2]].append(string)
             lines = []
@@ -331,3 +347,18 @@ def disallow(bot, update):
     db.execute_insert(db.set_settings_param_value, ("no", "allow"))
     bot.send_message(chat_id=update.message.chat_id,
                      text="Запись для курсантов закрыта.")
+
+
+@restricted(msg="Только администратор может записывать курсантов на занятия!")
+def register(bot, update, user_data):
+    """Handler for 'reg' command.
+
+    Registers one of students to a class.
+    Actually this handler only shows inline keyboard containing students list
+    """
+    try:
+        del(user_data['student_id'])
+    except KeyError:
+        pass
+    update.message.reply_text("Выбери кого добавляем: ",
+                              reply_markup=student_lists.user_kbd())

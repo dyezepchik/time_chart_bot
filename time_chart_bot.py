@@ -43,6 +43,7 @@ from admin_handlers import (
     add_schedule_continue,
     allow, disallow,
     inline_handler,
+    register,
     remove,
     remove_schedule_continue,
     schedule
@@ -125,6 +126,7 @@ def run_bot():
     cancel_handler = CommandHandler('cancel', end_conversation)
     allow_handler = CommandHandler('open', allow)
     disallow_handler = CommandHandler('close', disallow)
+    register_handler = CommandHandler('reg', register, pass_user_data=True)
     remove_schedule_handler = ConversationHandler(
         entry_points=[CommandHandler('remove', remove, pass_args=True, pass_user_data=True)],
         states={
@@ -156,6 +158,7 @@ def run_bot():
     dispatcher.add_handler(cancel_handler)
     dispatcher.add_handler(allow_handler)
     dispatcher.add_handler(disallow_handler)
+    dispatcher.add_handler(register_handler)
     dispatcher.add_handler(remove_schedule_handler)
     dispatcher.add_handler(unknown_handler)
 

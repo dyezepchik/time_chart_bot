@@ -181,6 +181,9 @@ def store_sign_up(bot, update, user_data):
     place = user_data['place']
     time = match.string
     user_id = update.effective_user.id
+    # logic for admins to add students
+    if user_id in LIST_OF_ADMINS:
+        user_id = user_data['student_id']
     class_id = db.execute_select(db.get_class_id_sql, (date, time, place))[0][0]
     db.execute_insert(db.set_user_subscription_sql, (user_id, class_id))
     # check if class is full (PEOPLE_PER_TIME_SLOT)

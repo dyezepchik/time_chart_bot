@@ -13,14 +13,17 @@ import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
+COMPONENT = 'calendar'
+
+
 def create_callback_data(action, year, month, day):
     """ Create the callback data associated to each button"""
-    return ";".join([action, str(year), str(month), str(day)])
+    return ";".join([COMPONENT, action, str(year), str(month), str(day)])
 
 
 def separate_callback_data(data):
     """ Separate the callback data"""
-    return data.split(";")
+    return data.split(";")[1:]
 
 
 def create_calendar(year=None, month=None):
@@ -36,6 +39,7 @@ def create_calendar(year=None, month=None):
     if month is None:
         month = now.month
     data_ignore = create_callback_data("IGNORE", year, month, 0)
+    data_cancel = create_callback_data("CANCEL", year, month, 0)
     keyboard = []
     # First row - Month and Year
     row = []
@@ -59,7 +63,7 @@ def create_calendar(year=None, month=None):
     # Last row - Buttons
     row = []
     row.append(InlineKeyboardButton("<", callback_data=create_callback_data("PREV-MONTH", year, month, day)))
-    row.append(InlineKeyboardButton("Отмена", callback_data=data_ignore))
+    row.append(InlineKeyboardButton("Отмена", callback_data=data_cancel))
     row.append(InlineKeyboardButton(">", callback_data=create_callback_data("NEXT-MONTH", year, month, day)))
     keyboard.append(row)
 
@@ -80,6 +84,8 @@ def process_calendar_selection(bot, update):
     (action, year, month, day) = separate_callback_data(query.data)
     curr = datetime.datetime(int(year), int(month), 1)
     if action == "IGNORE":
+        bot.answer_callback_query(callback_query_id=query.id)
+    elif action == "CANCEL":
         bot.edit_message_text(text="Отменил",
                               chat_id=query.message.chat_id,
                               message_id=query.message.message_id)
