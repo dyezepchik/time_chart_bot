@@ -43,9 +43,13 @@ def user_kbd(group_num=None):
     # Main rows
     for pair in stud_pairs:
         row = []
-        row.append(InlineKeyboardButton(pair[0][1], callback_data=create_callback_data("STUDENT", group_num, pair[0][0])))
+        row.append(InlineKeyboardButton(
+            text=pair[0][1] or pair[0][0],  # last name or id
+            callback_data=create_callback_data("STUDENT", group_num, pair[0][0])))
         if pair[1]:
-            row.append(InlineKeyboardButton(pair[1][1], callback_data=create_callback_data("STUDENT", group_num, pair[1][0])))
+            row.append(InlineKeyboardButton(
+                text=pair[1][1] or pair[1][0],  # last name or id
+                callback_data=create_callback_data("STUDENT", group_num, pair[1][0])))
         keyboard.append(row)
     # Last row - Buttons
     row = []
