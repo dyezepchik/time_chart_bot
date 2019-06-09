@@ -1,13 +1,26 @@
 import logging
+import re
 from functools import wraps
 
-from telegram import ReplyKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
+from telegram import (
+    InlineKeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove
+)
 
-from config import LIST_OF_ADMINS
-
+from config import (
+    CLASSES_HOURS,
+    LIST_OF_ADMINS,
+    PLACES
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# regex
+place_regex = re.compile("^({})$".format("|".join(PLACES)), flags=re.IGNORECASE)
+date_regex = re.compile(".*([0-9]{4}-[0-9]{2}-[0-9]{2}).*")
+time_regex = re.compile("^(" + "|".join(CLASSES_HOURS) + ")$")
 
 
 def restricted(msg="Ага, счас! Только администратору можно!", returns=None):

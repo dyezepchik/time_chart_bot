@@ -67,6 +67,10 @@ get_user_sql = """
 SELECT * FROM users WHERE id=%s;
 """
 
+get_users_sql = """
+SELECT id, last_name FROM users WHERE group_num=%s order by last_name;
+"""
+
 add_user_sql = """
 INSERT INTO users (id, nick_name, first_name, last_name)
 VALUES (%s,%s,%s,%s);
@@ -187,6 +191,13 @@ get_delete_classes_sql = """
     DELETE FROM classes WHERE id = ANY(%s);
 """
 
+get_latest_group_num = """
+    SELECT group_num
+    FROM users
+    WHERE group_num IS NOT null
+    ORDER BY group_num DESC LIMIT 1;
+"""
+
 
 def create_connection(conn_string):
     """ create a database connection to a SQLite database """
@@ -213,7 +224,7 @@ def execute_insert(sql, values):
             raise e
 
 
-def execute_select(sql, values):
+def execute_select(sql, values=None):
     """Execute given sql"""
     conn = create_connection(DATABASE_URL)
     with conn:
