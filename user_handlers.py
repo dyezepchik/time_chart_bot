@@ -86,8 +86,14 @@ def ask_date(bot, update, user_data):
                          text="Отменил. Попробуй заново.",
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
-    match = place_regex.match(msg)
-    place = match.group(1)
+    try:
+        match = place_regex.match(msg)
+        place = match.group(1)
+    except (TypeError, IndexError):
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Что-то пошло не так. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
     user_data['place'] = place
     open_dates = db.execute_select(db.get_open_classes_dates_sql,
                                    ((dt.date.today() + dt.timedelta(days=1)).isoformat(), place))
@@ -122,7 +128,13 @@ def ask_time(bot, update, user_data):
                          text="Отменил. Попробуй заново.",
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
-    match = date_regex.match(msg)
+    try:
+        match = date_regex.match(msg)
+    except TypeError:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Что-то пошло не так. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
     if not match:
         # checks that the given message contains something similar to date
         bot.send_message(chat_id=update.message.chat_id,
@@ -174,7 +186,13 @@ def store_sign_up(bot, update, user_data):
                          text="Отменил. Попробуй заново.",
                          reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
-    match = time_regex.match(msg)
+    try:
+        match = time_regex.match(msg)
+    except TypeError:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Что-то пошло не так. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
     if not match:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Плхоже, это было некорректное время. Попробуй еще раз.",
@@ -285,7 +303,13 @@ def unsubscribe(bot, update):
 def store_group_num(bot, update):
     user_id = update.effective_user.id
     msg = update.message.text.strip().split()[0]
-    group_num = re.match("\d+", msg)[0]
+    try:
+        group_num = int("".join(filter(str.isdigit, msg)))
+    except:
+        bot.send_message(chat_id=update.message.chat_id,
+                         text="Что-то пошло не так. Попробуй еще раз.",
+                         reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
     if not group_num:
         bot.send_message(chat_id=update.message.chat_id,
                          text="Я немного не понял. Просто напиши номер своей группы.")
