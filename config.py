@@ -24,7 +24,7 @@ CLOSED, OPEN = False, True
 
 LIST_OF_ADMINS = list(map(int, os.environ['ADMIN_IDS'].split(',')))
 
-PEOPLE_PER_TIME_SLOT = 8
+PEOPLE_PER_TIME_SLOT = 9
 
 PLACES = [
     "МГАК",

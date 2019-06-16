@@ -56,7 +56,10 @@ def ask_place(bot, update):
         return ConversationHandler.END
     user_id = update.effective_user.id
     today = dt.date.today()
-    start_of_the_week = today - dt.timedelta(days=today.weekday())
+    if today.weekday() == 6:
+        start_of_the_week = today + dt.timedelta(days=1)
+    else:
+        start_of_the_week = today - dt.timedelta(days=today.weekday())
     subs = db.execute_select(db.get_user_subscriptions_sql, (user_id, start_of_the_week.isoformat()))
     if user_id not in LIST_OF_ADMINS and len(subs) > 1:
         bot.send_message(chat_id=update.message.chat_id,
