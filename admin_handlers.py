@@ -268,15 +268,20 @@ def remove_schedule_continue(bot, update, user_data):
 
 @restricted(msg="Расписание покажу только администратору!")
 def schedule(bot, update, args):
-    if len(args) > 0 and args[0] not in ('++', 'all'):
-        bot.send_message(chat_id=update.message.chat_id, text="Наверное аргумент неправильный.")
-        return
-    add_count = args[0] == '++'
-    full_schedule = args[0] == 'all'
+    add_count = False
+    full_schedule = False
+    if len(args) > 0:
+        if args[0] not in ('++', 'all'):
+            bot.send_message(chat_id=update.message.chat_id, text="Наверное аргумент неправильный.")
+            return
+        add_count = args[0] == '++'
+        full_schedule = args[0] == 'all'
+
     if full_schedule:
         schedule = db.execute_select(db.get_full_schedule_sql, (dt.date(2019, 4, 1).isoformat(),))
     else:
         schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
+
     user_ids = list(set(map(lambda x: x[5] or 'unknown', schedule)))
     user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
     user_count = dict(user_count)
