@@ -268,10 +268,15 @@ def remove_schedule_continue(bot, update, user_data):
 
 @restricted(msg="Расписание покажу только администратору!")
 def schedule(bot, update, args):
-    if len(args) > 0 and args[0] != '++':
+    if len(args) > 0 and args[0] not in ('++', 'all'):
         bot.send_message(chat_id=update.message.chat_id, text="Наверное аргумент неправильный.")
         return
-    schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
+    add_count = args[0] == '++'
+    full_schedule = args[0] == 'all'
+    if full_schedule:
+        schedule = db.execute_select(db.get_full_schedule_sql, (dt.date(2019, 4, 1).isoformat(),))
+    else:
+        schedule = db.execute_select(db.get_full_schedule_sql, (dt.date.today().isoformat(),))
     user_ids = list(set(map(lambda x: x[5] or 'unknown', schedule)))
     user_count = db.execute_select(db.get_user_visits_count, (dt.date.today().isoformat(), user_ids))
     user_count = dict(user_count)
@@ -309,7 +314,7 @@ def schedule(bot, update, args):
             row += 1
             students_lists = defaultdict(list)
             for line in sorted(records, key=lambda x: x[4] or ''):  # sort by last name
-                string = f"{line[3]} {line[4]} ({line[5]})" if args else f"{line[3]} {line[4]}"
+                string = f"{line[3]} {line[4]} ({line[5]})" if add_count else f"{line[3]} {line[4]}"
                 students_lists[line[2]].append(string)
             lines = []
             for time in CLASSES_HOURS:
